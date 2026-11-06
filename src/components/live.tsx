@@ -160,7 +160,7 @@ export function CommandsPanel({ data }: { data: PanelData }) {
       <ul className="commands">
         <li><span><b>Hablar en el chat</b></span><span>Tu héroe sale de la taberna, se pone el primero de la fila y pega solo mientras sigas activo. Tras {c.idleMin} min sin escribir, vuelve a la taberna y deja de pegar. Escribir más no da más golpes: solo hace falta estar.</span></li>
         <li><code>!yo</code><span>Tu nivel y el daño que llevas, encima de tu héroe.</span></li>
-        <li><code>1</code> a <code>4</code><span>Solo cuando sale la tienda (después de cada oleada): votas qué mejora se compra con el oro de todos (1 Herrería, 2 Estandarte, 3 Armería, 4 Hoguera). Gana la más votada.</span></li>
+        <li><span><code>1</code> a <code>4</code></span><span>Solo cuando sale la tienda (después de cada oleada): votas qué mejora se compra con el oro de todos (1 Herrería, 2 Estandarte, 3 Armería, 4 Hoguera). Gana la más votada.</span></li>
       </ul>
       <p className="hint-text">Subs, regalos, bits (desde 100) y Super Chats lanzan un <b>evento</b> al azar{c.events ? '' : ' (ahora están apagados en la configuración)'}: {EVENT_KINDS.map(k => EVENTS[k].name.toLowerCase()).join(', ')}. Un regalo de {BIG_GIFT} subs o más lanza todos a la vez. Quien apoya se lleva además experiencia extra.</p>
     </section>
