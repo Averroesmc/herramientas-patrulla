@@ -6,7 +6,7 @@
  * Las fórmulas están en shared/game.ts.
  */
 import {
-  ATTACK_MULT, BIG_GIFT, ENEMY_SWING, EVENTS, EVENT_KINDS, FRENZY_MAX_SEC, FRENZY_MULT, FRENZY_SEC, HERO_SWING,
+  BIG_GIFT, ENEMY_SWING, EVENTS, EVENT_KINDS, FRENZY_MAX_SEC, FRENZY_MULT, FRENZY_SEC, HERO_SWING,
   UPGRADES, UPGRADE_IDS, enemiesInWave, enemyAttack, enemyHp, heroDamage, heroMaxHp, ignoredNames, killGold, killXp,
   koSeconds, maybeNewDay, parseCommand, stageLabel, themeOf, upgradeCost, waveGold, xpNeed, fmt,
   type Config, type EnemyKind, type EventKind, type HeroRecord, type PanelOp, type Platform, type Summary, type UpgradeId, type World,
@@ -87,9 +87,6 @@ class Hero {
   cd: number
   lastSpoke: number
   lastCmd = 0
-  lastAttack = -1e12
-  /** Ha escrito y aún no ha podido dar su golpe (estaba saliendo de la taberna o no había enemigo). */
-  wantsHit = 0
   onField = false
   leaving = false
   joinedAt: number
@@ -178,14 +175,13 @@ export class Game {
   isIgnored(name: string) { return this.ignored.has(name.replace(/^@/, '').toLowerCase()) }
 
   /**
-   * Un mensaje del chat: el héroe aparece (o vuelve de la taberna), se pone delante y da un golpe
-   * fuerte. Así se juega solo con hablar, sin comandos. Si es un comando (!yo, !tienda, !comprar), lo hace.
+   * Un mensaje del chat: el héroe aparece (o vuelve de la taberna) y se pone el primero de la fila.
+   * Hablar no da golpes: los héroes pegan solos mientras su dueño esté activo (ha escrito en los últimos
+   * idleMin minutos). Si es un comando (!yo, !tienda, !comprar), lo hace.
    */
   line(l: LineIn) {
     if (this.isIgnored(l.name)) return
     const hero = this.touch(l.k, l.p, l.name)
-    hero.wantsHit = this.now
-    this.strike(hero)
     const cmd = parseCommand(l.text)
     if (!cmd || this.now - hero.lastCmd < 1500) return
     hero.lastCmd = this.now
@@ -379,15 +375,13 @@ export class Game {
     if (engaged) {
       const ready = field.filter(h => !h.ko && h.x > FRONT_X - 260).sort((a, b) => b.x - a.x)
       victim = ready[0] ?? null
-      // Los golpes de quienes han escrito y aún no habían podido darlo.
-      for (const h of field) if (h.wantsHit && this.enemies.includes(engaged)) this.strike(h)
       // Pegan los héroes que ya están en su sitio.
       for (const h of field) {
         if (h.ko || Math.abs(h.x - (targets.get(h) ?? h.x)) > 30) continue
         h.cd -= dt
         if (h.cd > 0) continue
         h.cd = HERO_SWING * (0.9 + Math.random() * 0.25)
-        this.hit(h, engaged, this.damage(h), false)
+        this.hit(h, engaged, this.damage(h))
         if (!this.enemies.includes(engaged)) break
       }
       // Y pega el enemigo al héroe de delante.
@@ -467,7 +461,6 @@ export class Game {
     for (const h of this.heroes.values()) {
       if (h.demo && h.demoUntil > this.now) {
         if (this.now - h.lastSpoke > 15_000 + (h.seed % 20_000)) h.lastSpoke = this.now
-        if (Math.random() < 0.012) { h.lastSpoke = this.now; h.wantsHit = this.now }
       }
       if (this.now - h.lastSpoke < idleMs && !(h.demo && h.demoUntil <= this.now)) active.push(h)
       else if (h.demo && !h.onField) this.heroes.delete(h.rec.k)
@@ -513,21 +506,10 @@ export class Game {
     }
   }
 
-  /** El golpe fuerte de un mensaje del chat (como mucho uno cada attackSec por persona; si no se puede ahora, en cuanto se pueda). */
-  private strike(hero: Hero) {
-    if (hero.wantsHit && this.now - hero.wantsHit > 10_000) { hero.wantsHit = 0; return }
-    const front = this.enemies[0]
-    if (!hero.onField || hero.leaving || hero.ko || !front || front.x > ENEMY_X + 1) return
-    if (this.now - hero.lastAttack < this.config.attackSec * 1000) { hero.wantsHit = 0; return }
-    hero.lastAttack = this.now
-    hero.wantsHit = 0
-    this.hit(hero, front, this.damage(hero) * ATTACK_MULT, true)
-  }
-
-  private hit(hero: Hero, enemy: Enemy, dmg: number, crit: boolean) {
+  private hit(hero: Hero, enemy: Enemy, dmg: number) {
     const dealt = Math.min(dmg, enemy.hp)
     enemy.hp -= dmg
-    this.fx.push({ t: 'hit', k: hero.rec.k, e: enemy.id, dmg: Math.max(1, Math.round(dmg)), crit })
+    this.fx.push({ t: 'hit', k: hero.rec.k, e: enemy.id, dmg: Math.max(1, Math.round(dmg)), crit: false })
     if (!hero.demo) {
       if (hero.loaded) { hero.rec.dmg += dealt; hero.dirty = true } else hero.pending.dmg += dealt
       const t = this.today.get(hero.rec.k)

@@ -95,8 +95,7 @@ export function SettingsPanel({ data, patch }: { data: PanelData; patch: Patch }
         <h3 className="group__title">El juego</h3>
         <div className="fields">
           <NumberField label="Héroes a la vez en la barra" value={c.maxHeroes} min={5} max={60} onCommit={v => patch({ maxHeroes: v })} description="El resto espera en la taberna." />
-          <NumberField label="Minutos hasta irse a la taberna" value={c.idleMin} min={1} max={60} onCommit={v => patch({ idleMin: v })} description="Sin escribir en el chat." />
-          <NumberField label="Segundos entre dos golpes fuertes" value={c.attackSec} min={1} max={60} onCommit={v => patch({ attackSec: v })} description="Cada mensaje es un golpe; así escribir mucho no da más." />
+          <NumberField label="Minutos hasta irse a la taberna" value={c.idleMin} min={1} max={60} onCommit={v => patch({ idleMin: v })} description="Sin escribir en el chat. En la taberna no se pega ni se gana experiencia." />
           <NumberField label="Oleadas por zona" value={c.wavesPerZone} min={2} max={40} onCommit={v => patch({ wavesPerZone: v })} description="Con 10, más o menos una zona por directo." />
         </div>
         <Range label="Dificultad (vida de los enemigos)" value={c.difficulty} min={25} max={400} step={5} unit=" %" onChange={v => patch({ difficulty: v })} />

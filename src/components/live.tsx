@@ -175,7 +175,7 @@ export function CommandsPanel({ data }: { data: PanelData }) {
     <section className="panel">
       <h2 className="panel__title">Comandos del chat</h2>
       <ul className="commands">
-        <li><span><b>Escribir cualquier cosa</b></span><span>Tu héroe sale de la taberna, se pone el primero de la fila y da un golpe fuerte (×4, como mucho uno cada {c.attackSec} s). No hace falta ningún comando: se juega hablando. Tras {c.idleMin} min sin escribir, vuelve a la taberna.</span></li>
+        <li><span><b>Hablar en el chat</b></span><span>Tu héroe sale de la taberna, se pone el primero de la fila y pega solo mientras sigas activo. Tras {c.idleMin} min sin escribir, vuelve a la taberna y deja de pegar. Escribir más no da más golpes: solo hace falta estar.</span></li>
         <li><code>!yo</code><span>Tu nivel y el daño que llevas, encima de tu héroe.</span></li>
         <li><code>!tienda</code><span>Las mejoras del grupo y lo que cuestan.</span></li>
         <li><code>!comprar 1</code><span>Compra una mejora con el oro de todos (1 Herrería, 2 Estandarte, 3 Armería, 4 Hoguera).</span></li>

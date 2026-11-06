@@ -10,7 +10,7 @@ Está pensada para la pantalla de inicio (unos 8 minutos) y el Just Chatting (un
 
 ## Cómo se juega
 
-- **Se juega hablando, sin comandos**: cada mensaje del chat saca a tu héroe de la taberna (a la izquierda), lo pone el primero de la fila y da un golpe fuerte (×4; como mucho uno cada 5 s por persona, así que escribir mucho no da más). Tras unos minutos sin escribir vuelve a la taberna. Si no caben todos, esperan dentro; el cartel de la taberna dice cuántos hay.
+- **Se juega estando activo, sin comandos ni spam**: al escribir en el chat tu héroe sale de la taberna (a la izquierda) y se pone el primero de la fila. Pega solo mientras sigas activo; tras unos minutos sin escribir (10 por defecto) vuelve a la taberna y deja de pegar y de ganar experiencia. Escribir más no da más golpes. Si no caben todos, esperan dentro; el cartel de la taberna dice cuántos hay.
 - **Combate**: los héroes pegan solos. Delante va quien ha hablado el último, y es a quien pegan los enemigos: lo pueden dejar KO un rato.
 - **Oleadas y zonas**: cada oleada superada da oro; cada 10 oleadas (configurable) se pasa a otra zona con otro paisaje y otros enemigos (pradera, bosque, cueva, pantano, desierto, montaña helada, volcán, castillo oscuro, y vuelta a empezar más difícil).
 - **Comandos opcionales**: `!yo` (nivel y daño encima del héroe), `!tienda` y `!comprar 1-4` (mejoras del grupo: herrería, estandarte, armería, hoguera).

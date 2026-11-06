@@ -33,10 +33,11 @@ export interface Config {
   volume: number
   /** Cuántos héroes caben a la vez en la barra; el resto espera en la taberna. */
   maxHeroes: number
-  /** Minutos sin escribir hasta que el héroe se va a la taberna. */
+  /**
+   * Minutos sin escribir hasta que el héroe se va a la taberna (y deja de pegar). Hablar no da golpes:
+   * solo hace falta estar activo, así no se premia llenar el chat.
+   */
   idleMin: number
-  /** Cada mensaje del chat es un golpe fuerte de su héroe: como mucho uno cada tantos segundos por persona. */
-  attackSec: number
   /** Vida de los enemigos, en %: 100 es lo normal. */
   difficulty: number
   /** Oleadas que hay que superar para pasar a la zona siguiente. */
@@ -62,7 +63,6 @@ export function defaultConfig(): Config {
     volume: 60,
     maxHeroes: 30,
     idleMin: 10,
-    attackSec: 5,
     difficulty: 100,
     wavesPerZone: 10,
     events: true,
@@ -99,7 +99,6 @@ export function sanitizeConfig(raw: unknown, base: Config = defaultConfig()): Co
     volume: clamp(o.volume, 0, 100, base.volume),
     maxHeroes: clamp(o.maxHeroes, 5, 60, base.maxHeroes),
     idleMin: clamp(o.idleMin, 1, 60, base.idleMin),
-    attackSec: clamp(o.attackSec, 1, 60, base.attackSec),
     difficulty: clamp(o.difficulty, 25, 400, base.difficulty),
     wavesPerZone: clamp(o.wavesPerZone, 2, 40, base.wavesPerZone),
     events: bool(o.events, base.events),
@@ -136,8 +135,6 @@ export const upgradeCost = (id: UpgradeId, level: number) => Math.round(UPGRADES
 
 /** Cada cuánto pega solo un héroe, en segundos. */
 export const HERO_SWING = 1.2
-/** El golpe de cada mensaje del chat vale por este número de golpes normales. */
-export const ATTACK_MULT = 4
 /** El frenesí multiplica el daño de todos. */
 export const FRENZY_MULT = 2
 export const FRENZY_SEC = 20
