@@ -6,13 +6,15 @@
  * fuente de OBS que juega y en las que solo la copian.
  */
 import { coinIcon, enemySprite, heroSprite, mugIcon, shade, type HeroSprite } from './sprites'
-import { DOOR_X, ENEMY_X, SPAWN_X, type Fx, type HeroView, type RenderState, type ShopItem } from './game'
+import { DOOR_X, ENEMY_X, SPAWN_X, type Fx, type HeroView, type RenderState, type ShopView } from './game'
 import { sfx, setSound } from './sfx'
 import { THEMES, fmt, heroTier, stageLabel, themeOf, zoneName, type Config, type Theme } from '../../shared/game'
 
 /** Los fondos dibujados (scripts/preparar-fondos.py) miden 120 px de alto, con 18 px de suelo bajo donde pisan los héroes. */
 const ART_BAND = 120
 const ART_GROUND = 18
+/** Dónde está la puerta de la taberna dibujada, como fracción de su ancho. */
+const TAVERN_DOOR_X = 0.46
 
 /** Hueco del canvas por encima de la barra, para los números, los avisos de nivel y los bocadillos. */
 const TOP = 130
@@ -35,7 +37,7 @@ interface Floater { x: number; y: number; text: string; color: string; size: num
 interface Shot { x0: number; y0: number; x1: number; y1: number; t: number; dur: number; color: string }
 interface CoinFly { x0: number; y0: number; t: number; dur: number }
 interface Meteor { x0: number; y0: number; x1: number; y1: number; t: number; dur: number; dmg: number }
-interface Toast { kind: 'small' | 'big' | 'shop'; title: string; text?: string; items?: ShopItem[]; ms: number; important: boolean }
+interface Toast { kind: 'small' | 'big'; title: string; text?: string; ms: number; important: boolean }
 
 export class View {
   private readonly root: HTMLElement
@@ -43,12 +45,15 @@ export class View {
   private readonly ctx: CanvasRenderingContext2D
   private readonly hud: HTMLDivElement
   private readonly toastBox: HTMLDivElement
+  private readonly shopBox: HTMLDivElement
+  private shopKey = ''
   private readonly waiting: HTMLDivElement
   private config: Config
   private px = 3
   private H = 120
   private groundY = 0
   private art = new Map<number, HTMLImageElement | null>()
+  private sprites = new Map<string, HTMLImageElement | null>()
   private heroes = new Map<string, HeroAnim>()
   private enemies = new Map<number, EnemyAnim>()
   private particles: Particle[] = []
@@ -86,11 +91,14 @@ export class View {
     this.hud.className = 'slab outline'
     this.toastBox = document.createElement('div')
     this.toastBox.id = 'toasts'
+    this.shopBox = document.createElement('div')
+    this.shopBox.id = 'shopbox'
+    this.shopBox.className = 'slab outline hidden'
     this.waiting = document.createElement('div')
     this.waiting.id = 'waiting'
     this.waiting.className = 'outline hidden'
     this.waiting.textContent = '¡Escribe en el chat para unirte a la patrulla!'
-    root.append(this.canvas, this.hud, this.waiting, this.toastBox)
+    root.append(this.canvas, this.hud, this.waiting, this.shopBox, this.toastBox)
     this.setConfig(config)
   }
 
@@ -134,6 +142,7 @@ export class View {
     this.update(dt)
     this.draw(state)
     this.drawHud(state)
+    this.drawShop(state.shop)
     this.waiting.classList.toggle('hidden', state.heroes.length > 0)
     this.flushLevels(now)
     this.showToasts(now)
@@ -253,15 +262,12 @@ export class View {
       case 'me':
         if (anim) anim.bubble = { text: f.text, until: this.time + 6 }
         break
-      case 'shop':
-        this.toast({ kind: 'shop', title: 'TIENDA', text: '!comprar 1-4', items: f.items, ms: 9000, important: true })
-        break
       case 'buy':
         this.toast({ kind: 'big', title: `¡${f.name} nivel ${f.level}!`, text: `Comprada por ${f.by}`, ms: 4500, important: true })
         this.play('buy', 300, () => sfx.buy())
         break
-      case 'poor':
-        if (!this.config.quiet) this.toast({ kind: 'small', title: `Falta oro para ${f.name}`, text: `Faltan ${fmt(f.missing)}`, ms: 3000, important: false })
+      case 'noVote':
+        if (!this.config.quiet) this.toast({ kind: 'small', title: 'Nadie ha votado en la tienda', text: 'El oro se guarda para la próxima', ms: 3000, important: false })
         break
       case 'support':
         this.toast({ kind: 'big', title: f.title, text: f.text, ms: 5500, important: true })
@@ -364,6 +370,21 @@ export class View {
     else this.toast({ kind: 'small', title: `¡${list.length} héroes suben de nivel!`, text: list.slice(0, 4).map(l => l.name).join(', ') + (list.length > 4 ? '…' : ''), ms: 3800, important: !this.config.quiet })
   }
 
+  /** La tienda de después de cada oleada: las mejoras que se pueden pagar, los votos de cada una y el tiempo que queda. */
+  private drawShop(shop: ShopView | null) {
+    this.root.classList.toggle('shop-open', !!shop)
+    if (!shop) { this.shopBox.classList.add('hidden'); this.shopKey = ''; return }
+    const key = `${Math.ceil(shop.left)}|${shop.items.map(i => `${i.votes}${i.can ? 'y' : 'n'}${i.level}`).join(',')}`
+    if (key === this.shopKey) return
+    this.shopKey = key
+    const total = shop.items.reduce((a, i) => a + i.votes, 0)
+    this.shopBox.classList.remove('hidden')
+    this.shopBox.innerHTML = `<div class="sh">TIENDA <span class="cmd">escribe 1-${shop.items.length} para votar</span><span class="left">${Math.ceil(shop.left)} s</span></div>
+      <div class="timer slot"><i style="width:${Math.max(0, Math.min(100, (shop.left / shop.total) * 100))}%"></i></div>
+      <div class="shop">${shop.items.map(i =>
+        `<div class="item${i.can ? ' can' : ''}"><b>${i.n}</b><span>${esc(i.name)} <small>nv ${i.level}</small><em>${esc(i.effect)}</em></span><i>${i.cost ? fmt(i.cost) : 'MÁX'}</i><u style="width:${total ? Math.round((i.votes / total) * 100) : 0}%"></u><s>${i.votes ? `${i.votes} ${i.votes === 1 ? 'voto' : 'votos'}` : ''}</s></div>`).join('')}</div>`
+  }
+
   private showToasts(now: number) {
     if (now < this.toastUntil) return
     const t = this.toasts.shift()
@@ -371,12 +392,7 @@ export class View {
     this.toastUntil = now + t.ms
     const el = document.createElement('div')
     el.className = `toast slab outline is-${t.kind}`
-    if (t.kind === 'shop') {
-      el.innerHTML = `<div class="tt">${esc(t.title)} <span class="cmd">${esc(t.text ?? '')}</span></div><div class="shop">${(t.items ?? []).map(i =>
-        `<div class="item${i.can ? ' can' : ''}"><b>${i.n}</b><span>${esc(i.name)} <small>nv ${i.level}</small><em>${esc(i.effect)}</em></span><i>${i.cost ? fmt(i.cost) : 'MÁX'}</i></div>`).join('')}</div>`
-    } else {
-      el.innerHTML = `<div class="tt">${esc(t.title)}</div>${t.text ? `<div class="tx">${esc(t.text)}</div>` : ''}`
-    }
+    el.innerHTML = `<div class="tt">${esc(t.title)}</div>${t.text ? `<div class="tx">${esc(t.text)}</div>` : ''}`
     const old = this.toastBox.firstElementChild
     if (old) { old.classList.remove('on'); setTimeout(() => old.remove(), 300) }
     this.toastBox.prepend(el)
@@ -434,7 +450,7 @@ export class View {
     this.coins = this.coins.filter(c => c.t < c.dur)
     if (this.fading) { this.fading.t -= dt; if (this.fading.t <= 0) this.fading = null }
     // Humo de la chimenea.
-    if (Math.random() < dt * 3 && this.particles.length < 260) {
+    if (Math.random() < dt * 3 && this.particles.length < 260 && !this.sprite('taberna')) {
       const x0 = DOOR_X - 20 * this.px
       this.particles.push({ x: x0 + 30 * this.px, y: this.groundY - 30 * this.px, vx: 6 + Math.random() * 8, vy: -18 - Math.random() * 10, life: 0, max: 2.6, color: 'rgba(220,220,230,.55)', size: this.px * 2, g: -2 })
     }
@@ -680,11 +696,40 @@ export class View {
     for (let x = off; x < W; x += w) this.ctx.drawImage(img, x, 0)
   }
 
+  /** Un sprite dibujado (public/arte/sprites), o null si aún no ha cargado o no existe (entonces se usa el dibujo hecho con código). */
+  private sprite(name: string): HTMLImageElement | null {
+    let img = this.sprites.get(name)
+    if (img === undefined) {
+      img = new Image()
+      img.src = `/arte/sprites/${name}.png`
+      img.onerror = () => { this.sprites.set(name, null) }
+      this.sprites.set(name, img)
+    }
+    return img && img.complete && img.naturalWidth > 0 ? img : null
+  }
+
   private drawTavern(state: RenderState) {
     const ctx = this.ctx
     const P = this.px
     const x0 = DOOR_X - 20 * P
     const g = this.groundY
+    const art = this.sprite('taberna')
+    if (art) {
+      // La casa dibujada: la puerta (46 % del ancho) queda en DOOR_X, por donde entran y salen los héroes.
+      const k = this.H / ART_BAND
+      const w = Math.round(art.naturalWidth * k)
+      const h = Math.round(art.naturalHeight * k)
+      const x = Math.round(DOOR_X - w * TAVERN_DOOR_X)
+      ctx.drawImage(art, x, g - h, w, h)
+      if (this.doorOpen > 0) {
+        ctx.globalAlpha = Math.min(1, this.doorOpen * 2.5) * 0.85
+        ctx.fillStyle = '#ffcf6b'
+        ctx.fillRect(Math.round(x + w * 0.352), Math.round(g - h + h * 0.56), Math.round(w * 0.233), Math.round(h * 0.38))
+        ctx.globalAlpha = 1
+      }
+      if (state.tavern > 0 && this.icons) this.tavernCount(state.tavern, x + 6 * k, g - h + 10 * k)
+      return
+    }
     const r = (x: number, y: number, w: number, h: number, c: string) => { ctx.fillStyle = c; ctx.fillRect(x0 + x * P, g - y * P, w * P, h * P) }
     r(28, 33, 4, 8, '#5a5a66')
     r(27, 34, 6, 1, '#3a3a44')
@@ -709,17 +754,20 @@ export class View {
     ctx.globalAlpha = 1
     r(9, 15, 1, 6, '#6e4524'); r(6, 12, 7, 1, '#6e4524')
     r(30, 15, 1, 6, '#6e4524'); r(27, 12, 7, 1, '#6e4524')
-    if (state.tavern > 0 && this.icons) {
-      const bx = x0 + 6 * P
-      const by = g - 46 * P
-      const label = `×${state.tavern}`
-      ctx.font = `700 ${Math.round(18 * this.k)}px ${FONT}`
-      const tw = ctx.measureText(label).width
-      ctx.fillStyle = 'rgba(10,10,14,.82)'
-      ctx.fillRect(bx - 4, by - 4, this.icons.mug.width + tw + 18, this.icons.mug.height + 8)
-      ctx.drawImage(this.icons.mug, bx + 2, by)
-      this.text(label, bx + this.icons.mug.width + 8, by + this.icons.mug.height - 2, 18 * this.k, '#ffe14d')
-    }
+    if (state.tavern > 0 && this.icons) this.tavernCount(state.tavern, x0 + 6 * P, g - 46 * P)
+  }
+
+  /** El cartelito con la jarra y cuántos héroes esperan dentro de la taberna. */
+  private tavernCount(n: number, bx: number, by: number) {
+    if (!this.icons) return
+    const ctx = this.ctx
+    const label = `×${n}`
+    ctx.font = `700 ${Math.round(18 * this.k)}px ${FONT}`
+    const tw = ctx.measureText(label).width
+    ctx.fillStyle = 'rgba(10,10,14,.82)'
+    ctx.fillRect(bx - 4, by - 4, this.icons.mug.width + tw + 18, this.icons.mug.height + 8)
+    ctx.drawImage(this.icons.mug, bx + 2, by)
+    this.text(label, bx + this.icons.mug.width + 8, by + this.icons.mug.height - 2, 18 * this.k, '#ffe14d')
   }
 
   /* ---------------- héroes y enemigos */

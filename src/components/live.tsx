@@ -3,11 +3,9 @@ import { Check, Copy, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/arc/button/button'
 import { newKey, overlayOpen, overlayUrl, type PanelData } from '@/lib/api'
 import {
-  BIG_GIFT, EVENTS, EVENT_KINDS, PLATFORMS, PLATFORM_NAME, UPGRADES, UPGRADE_IDS, fmt, stageLabel, upgradeCost, xpNeed, zoneName,
-  type PanelOp, type ReaderStatus,
+  BIG_GIFT, EVENTS, EVENT_KINDS, PLATFORMS, PLATFORM_NAME, SHOP_SEC, UPGRADES, UPGRADE_IDS, fmt, stageLabel, upgradeCost, xpNeed, zoneName,
+  type ReaderStatus,
 } from '../../shared/game'
-
-type Ops = (...ops: PanelOp[]) => Promise<void>
 
 const STATUS_TEXT: Record<ReaderStatus, string> = { off: 'apagado', connecting: 'conectando…', ok: 'leyendo', error: 'con problemas' }
 const dotClass = (s: ReaderStatus) => (s === 'ok' ? 'is-live' : s === 'connecting' ? 'is-connecting' : s === 'error' ? 'is-error' : '')
@@ -87,9 +85,8 @@ export function ObsPanel({ data, accept, notify }: { data: PanelData; accept: (d
 }
 
 /** Cómo va la aventura: el día, la zona, el oro, las mejoras y los botones de prueba. */
-export function AdventurePanel({ data, ops }: { data: PanelData; ops: Ops }) {
+export function AdventurePanel({ data }: { data: PanelData }) {
   const w = data.world
-  const open = overlayOpen(data)
   const y = w.yesterday
   const s = w.session
   return (
@@ -122,22 +119,8 @@ export function AdventurePanel({ data, ops }: { data: PanelData; ops: Ops }) {
           )
         })}
       </ul>
-      <p className="hint-text">Las compra el chat con <code>!comprar 1</code> a <code>!comprar 4</code>, con el oro de todos.</p>
+      <p className="hint-text">Se compran con el oro de todos: después de cada oleada sale la tienda en el overlay y el chat vota escribiendo <code>1</code> a <code>4</code> durante {SHOP_SEC} s. Se compra la más votada (solo se puede votar lo que se pueda pagar).</p>
 
-      <h3 className="group__title">Probar</h3>
-      <div className="row-start">
-        <Button variant="secondary" size="sm" onClick={() => ops({ type: 'fake', n: 5 })}>+5 héroes de prueba</Button>
-        <Button variant="secondary" size="sm" onClick={() => ops({ type: 'gold', n: 500 })}>+500 de oro</Button>
-        {EVENT_KINDS.map(kind => <Button key={kind} variant="secondary" size="sm" onClick={() => ops({ type: 'event', kind })}>{EVENTS[kind].name}</Button>)}
-        <Button variant="secondary" size="sm" onClick={() => ops({ type: 'event', kind: 'all' })}>Superevento (regalo de {BIG_GIFT})</Button>
-        <Button variant="secondary" size="sm" onClick={() => ops({ type: 'newDay' })}>Empezar día nuevo</Button>
-      </div>
-      <p className="hint-text">
-        {open ? 'Se hacen en el overlay de OBS en unos segundos.' : 'Se harán cuando abras el overlay en OBS (si es en el próximo minuto).'}
-        {' '}Los héroes de prueba no se guardan y se van solos a los 3 minutos, pero el oro y las oleadas que consigan sí cuentan.
-        {' '}El día cambia solo cuando pasan 3 horas sin que juegue nadie.
-        {data.pendingOps > 0 && <> · <b>{data.pendingOps} pendiente{data.pendingOps === 1 ? '' : 's'}</b></>}
-      </p>
     </section>
   )
 }
@@ -177,8 +160,7 @@ export function CommandsPanel({ data }: { data: PanelData }) {
       <ul className="commands">
         <li><span><b>Hablar en el chat</b></span><span>Tu héroe sale de la taberna, se pone el primero de la fila y pega solo mientras sigas activo. Tras {c.idleMin} min sin escribir, vuelve a la taberna y deja de pegar. Escribir más no da más golpes: solo hace falta estar.</span></li>
         <li><code>!yo</code><span>Tu nivel y el daño que llevas, encima de tu héroe.</span></li>
-        <li><code>!tienda</code><span>Las mejoras del grupo y lo que cuestan.</span></li>
-        <li><code>!comprar 1</code><span>Compra una mejora con el oro de todos (1 Herrería, 2 Estandarte, 3 Armería, 4 Hoguera).</span></li>
+        <li><code>1</code> a <code>4</code><span>Solo cuando sale la tienda (después de cada oleada): votas qué mejora se compra con el oro de todos (1 Herrería, 2 Estandarte, 3 Armería, 4 Hoguera). Gana la más votada.</span></li>
       </ul>
       <p className="hint-text">Subs, regalos, bits (desde 100) y Super Chats lanzan un <b>evento</b> al azar{c.events ? '' : ' (ahora están apagados en la configuración)'}: {EVENT_KINDS.map(k => EVENTS[k].name.toLowerCase()).join(', ')}. Un regalo de {BIG_GIFT} subs o más lanza todos a la vez. Quien apoya se lleva además experiencia extra.</p>
     </section>

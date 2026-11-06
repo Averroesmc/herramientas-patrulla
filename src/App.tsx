@@ -5,6 +5,7 @@ import Toast from '@/components/arc/toast/toast'
 import { ThemeToggle } from '@/components/theme-toggle'
 import { AdventurePanel, CommandsPanel, HeroesPanel, ObsPanel } from '@/components/live'
 import { BackupPanel, SettingsPanel } from '@/components/settings'
+import { TestPanel } from '@/components/test'
 import { ApiError, fetchPanel, HOME, saveConfig, sendOps, type PanelData } from '@/lib/api'
 import type { Config, PanelOp } from '../shared/game'
 
@@ -101,9 +102,10 @@ export default function App() {
             <ObsPanel data={data} accept={accept} notify={notify} />
             <div className="columns">
               <div className="column">
-                <AdventurePanel data={data} ops={ops} />
+                <AdventurePanel data={data} />
                 <HeroesPanel data={data} />
                 <CommandsPanel data={data} />
+                <TestPanel data={data} ops={ops} />
               </div>
               <div className="column">
                 <SettingsPanel data={data} patch={patch} />

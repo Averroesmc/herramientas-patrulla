@@ -8,7 +8,7 @@
 import {
   BIG_GIFT, ENEMY_SWING, EVENTS, EVENT_KINDS, FRENZY_MAX_SEC, FRENZY_MULT, FRENZY_SEC, HERO_SWING,
   UPGRADES, UPGRADE_IDS, enemiesInWave, enemyAttack, enemyHp, heroDamage, heroMaxHp, ignoredNames, killGold, killXp,
-  koSeconds, maybeNewDay, parseCommand, stageLabel, themeOf, upgradeCost, waveGold, xpNeed, fmt,
+  koSeconds, maybeNewDay, parseCommand, parseVote, SHOP_SEC, stageLabel, themeOf, upgradeCost, waveGold, xpNeed, fmt,
   type Config, type EnemyKind, type EventKind, type HeroRecord, type PanelOp, type Platform, type Summary, type UpgradeId, type World,
 } from '../../shared/game'
 
@@ -43,14 +43,15 @@ export type Fx =
   | { t: 'zone'; zone: number }
   | { t: 'join'; k: string }
   | { t: 'me'; k: string; text: string }
-  | { t: 'shop'; items: ShopItem[] }
   | { t: 'buy'; name: string; level: number; by: string }
-  | { t: 'poor'; name: string; missing: number }
+  | { t: 'noVote' }
   | { t: 'support'; title: string; text: string }
   | { t: 'event'; kind: EventKind; power: number; hits: { e: number; dmg: number }[]; gold: number }
   | { t: 'day'; day: number; zone: number; wave: number; yesterday: Summary | null }
 
-export interface ShopItem { n: number; name: string; effect: string; level: number; cost: number; can: boolean }
+export interface ShopItem { n: number; name: string; effect: string; level: number; cost: number; can: boolean; votes: number }
+/** La tienda abierta, con los votos de cada mejora y los segundos que quedan. */
+export interface ShopView { items: ShopItem[]; left: number; total: number }
 
 export interface HeroView {
   k: string; name: string; p: Platform | 'demo'; level: number; x: number; row: number
@@ -64,6 +65,8 @@ export interface RenderState {
   waveKills: number; waveTotal: number
   /** Héroes de hoy que están en la taberna (sin escribir hace rato o porque no caben). */
   tavern: number
+  /** La tienda abierta (se vota después de cada oleada), o null. */
+  shop: ShopView | null
   frenzy: number
   heroes: HeroView[]
   enemies: EnemyView[]
@@ -134,8 +137,8 @@ export class Game {
   private nextDemo = 1
   private fieldTimer = 0
   private dayShown = false
-  private shopAt = -1e12
-  private poorAt = -1e12
+  /** La tienda abierta: hasta cuándo y quién ha votado qué. */
+  private shop: { until: number; votes: Map<string, number> } | null = null
   /** Daño de hoy por persona, para el MVP. */
   private today = new Map<string, { name: string; dmg: number }>()
   /** Héroes que hay que pedir a la base de datos. */
@@ -181,15 +184,17 @@ export class Game {
    */
   line(l: LineIn) {
     if (this.isIgnored(l.name)) return
-    const hero = this.touch(l.k, l.p, l.name)
-    const cmd = parseCommand(l.text)
+    this.command(this.touch(l.k, l.p, l.name), l.text)
+  }
+
+  /** Si el mensaje es un comando (!yo, !tienda, !comprar), lo hace. */
+  private command(hero: Hero, text: string) {
+    const vote = parseVote(text)
+    if (vote !== null) { this.vote(hero, vote); return }
+    const cmd = parseCommand(text)
     if (!cmd || this.now - hero.lastCmd < 1500) return
     hero.lastCmd = this.now
-    switch (cmd.type) {
-      case 'me': this.fx.push({ t: 'me', k: hero.rec.k, text: this.describe(hero) }); break
-      case 'shop': this.showShop(); break
-      case 'buy': this.buy(cmd.id, hero.rec.name); break
-    }
+    if (cmd.type === 'me') this.fx.push({ t: 'me', k: hero.rec.k, text: this.describe(hero) })
   }
 
   /**
@@ -250,7 +255,43 @@ export class Game {
 
   op(op: PanelOp) {
     switch (op.type) {
-      case 'fake': for (let i = 0; i < op.n; i++) this.addDemo(180_000); break
+      case 'fake': for (let i = 0; i < op.n; i++) this.addDemo(op.minutes * 60_000, { level: op.level, p: op.p }); break
+      case 'say': {
+        const name = op.name.replace(/^@/, '')
+        let hero = [...this.heroes.values()].find(h => h.demo && h.rec.name.toLowerCase() === name.toLowerCase())
+        hero ??= this.addDemo(10 * 60_000, { name, p: op.p })
+        hero.lastSpoke = this.now
+        hero.demoUntil = Math.max(hero.demoUntil, this.now + 10 * 60_000)
+        this.fieldTimer = 0
+        this.command(hero, op.text)
+        break
+      }
+      case 'support': this.support({ name: op.name, kind: op.kind, n: op.n }); break
+      case 'zone': {
+        const w = this.world
+        w.zone = op.zone
+        w.wave = 0
+        w.best = Math.max(w.best, w.zone)
+        this.enemies = []
+        this.phase = 'walk'
+        this.walkLeft = 1
+        this.waveTotal = 0
+        this.waveSpawned = 0
+        this.fx.push({ t: 'zone', zone: w.zone })
+        break
+      }
+      case 'wave':
+        if (this.phase === 'fight' && this.waveTotal) {
+          for (const e of this.enemies.slice()) this.kill(e, null)
+          this.waveSpawned = this.waveTotal
+        } else this.walkLeft = 0
+        break
+      case 'ko':
+        for (const h of this.field()) if (!h.ko) { h.hp = 0; h.ko = koSeconds(this.world.upgrades.campfire); this.fx.push({ t: 'ko', k: h.rec.k }) }
+        break
+      case 'clearBots':
+        for (const [k, h] of this.heroes) if (h.demo) this.heroes.delete(k)
+        break
       case 'gold': this.world.gold += op.n; break
       case 'event':
         if (op.kind === 'all') this.support({ name: 'Prueba', kind: 'gift', n: BIG_GIFT })
@@ -267,14 +308,16 @@ export class Game {
   }
 
   /** Héroes de prueba (botón del panel y vista previa): no se guardan. */
-  addDemo(ms: number) {
+  addDemo(ms: number, opts: { level?: number; p?: Platform; name?: string } = {}): Hero {
     const n = this.nextDemo++
-    const name = DEMO_NAMES[(n - 1) % DEMO_NAMES.length]! + (n > DEMO_NAMES.length ? String(Math.ceil(n / DEMO_NAMES.length)) : '')
-    const rec: HeroRecord = { k: `demo:${n}`, p: 'twitch', name, level: 1 + Math.floor(Math.random() * 9), xp: 0, dmg: 0, kills: 0, first: this.now, last: this.now }
+    const name = opts.name ?? DEMO_NAMES[(n - 1) % DEMO_NAMES.length]! + (n > DEMO_NAMES.length ? String(Math.ceil(n / DEMO_NAMES.length)) : '')
+    const level = opts.level ? opts.level : 1 + Math.floor(Math.random() * 9)
+    const rec: HeroRecord = { k: `demo:${n}`, p: opts.p ?? 'twitch', name: name.slice(0, 40), level, xp: 0, dmg: 0, kills: 0, first: this.now, last: this.now }
     const hero = new Hero(rec, true, true, this.now)
     hero.hp = heroMaxHp(rec.level, this.world.upgrades.armor)
     hero.demoUntil = this.now + ms
     this.heroes.set(rec.k, hero)
+    return hero
   }
 
   /** Lo que llega de la base de datos: el nivel y lo aportado de cada uno. */
@@ -329,6 +372,7 @@ export class Game {
     this.fieldTimer -= dt
     if (this.fieldTimer <= 0) { this.fieldTimer = 0.5; this.arrange() }
     if (this.frenzy > 0) this.frenzy = Math.max(0, this.frenzy - dt)
+    if (this.shop && now >= this.shop.until) this.closeShop()
 
     const field = this.field()
     if (field.some(h => !h.demo)) this.world.session.lastAt = now
@@ -421,7 +465,7 @@ export class Game {
     return {
       zone: this.world.zone, wave: this.world.wave, wavesPerZone: this.config.wavesPerZone, gold: this.world.gold,
       day: this.world.session.day, phase: this.phase, waveKills: this.waveKills, waveTotal: this.waveTotal || enemiesInWave(this.world.wave),
-      tavern, frenzy: this.frenzy, heroes,
+      tavern, shop: this.shopView(), frenzy: this.frenzy, heroes,
       enemies: this.enemies.map(e => ({ id: e.id, kind: e.kind, tint: e.tint, x: e.x, hp: e.hp, maxHp: e.maxHp })),
     }
   }
@@ -575,6 +619,7 @@ export class Game {
     w.totals.waves++
     w.session.waves++
     this.fx.push({ t: 'wave', gold, stage: stageLabel(w.zone, w.wave) })
+    this.openShop()
     w.wave++
     if (w.wave >= this.config.wavesPerZone) {
       w.wave = 0
@@ -593,24 +638,50 @@ export class Game {
       const level = this.world.upgrades[id]
       const max = level >= UPGRADES[id].max
       const cost = upgradeCost(id, level)
-      return { n: i + 1, name: UPGRADES[id].name, effect: UPGRADES[id].effect, level, cost: max ? 0 : cost, can: !max && this.world.gold >= cost }
+      return { n: i + 1, name: UPGRADES[id].name, effect: UPGRADES[id].effect, level, cost: max ? 0 : cost, can: !max && this.world.gold >= cost, votes: 0 }
     })
   }
 
-  private showShop() {
-    if (this.now - this.shopAt < 12_000) return
-    this.shopAt = this.now
-    this.fx.push({ t: 'shop', items: this.shopItems() })
+  private shopView(): ShopView | null {
+    const shop = this.shop
+    if (!shop) return null
+    const items = this.shopItems()
+    for (const i of shop.votes.values()) if (items[i]) items[i]!.votes++
+    return { items, left: Math.max(0, (shop.until - this.now) / 1000), total: SHOP_SEC }
+  }
+
+  /** Después de cada oleada: si hay algo que se pueda pagar, sale la tienda y el chat vota. */
+  private openShop() {
+    if (this.shop || !this.shopItems().some(i => i.can)) return
+    this.shop = { until: this.now + SHOP_SEC * 1000, votes: new Map() }
+  }
+
+  /** Un voto de la tienda (el último de cada persona vale). Solo se puede votar lo que se puede pagar. */
+  private vote(hero: Hero, index: number) {
+    if (!this.shop || !this.shopItems()[index]?.can) return
+    this.shop.votes.set(hero.rec.k, index)
+  }
+
+  /** Se acaba la votación: se compra la más votada (si hay empate, al azar entre las empatadas). */
+  closeShop() {
+    const shop = this.shop
+    this.shop = null
+    if (!shop) return
+    const items = this.shopItems()
+    const count = items.map(() => 0)
+    for (const i of shop.votes.values()) if (items[i]?.can) count[i]!++
+    const best = Math.max(0, ...count)
+    if (!best) { this.fx.push({ t: 'noVote' }); return }
+    const tied = count.flatMap((c, i) => (c === best ? [i] : []))
+    const pick = tied[Math.floor(Math.random() * tied.length)]!
+    this.buy(UPGRADE_IDS[pick]!, `${best} ${best === 1 ? 'voto' : 'votos'}`)
   }
 
   private buy(id: UpgradeId, by: string) {
     const level = this.world.upgrades[id]
     if (level >= UPGRADES[id].max) return
     const cost = upgradeCost(id, level)
-    if (this.world.gold < cost) {
-      if (this.now - this.poorAt > 8000) { this.poorAt = this.now; this.fx.push({ t: 'poor', name: UPGRADES[id].name, missing: cost - this.world.gold }) }
-      return
-    }
+    if (this.world.gold < cost) return
     this.world.gold -= cost
     this.world.upgrades[id] = level + 1
     if (id === 'armor') for (const h of this.heroes.values()) if (!h.ko) h.hp = this.maxHp(h)

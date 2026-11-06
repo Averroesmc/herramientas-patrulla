@@ -391,10 +391,17 @@ export const heroTier = (level: number) => (level >= 35 ? 4 : level >= 20 ? 3 : 
 
 /* ---------------------------------------------------------------- comandos del chat */
 
-export type Command =
-  | { type: 'me' }
-  | { type: 'shop' }
-  | { type: 'buy'; id: UpgradeId }
+export type Command = { type: 'me' }
+
+/** El voto de la tienda: un mensaje que es solo el número de la mejora («2» o «!2»). Devuelve su índice (0 a 3). */
+export function parseVote(text: string): number | null {
+  const m = text.trim().match(/^!?([1-9])$/)
+  const n = m ? Number(m[1]) : 0
+  return n >= 1 && n <= UPGRADE_IDS.length ? n - 1 : null
+}
+
+/** Cuánto dura la votación de la tienda después de cada oleada. */
+export const SHOP_SEC = 15
 
 const fold = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
 
@@ -402,35 +409,60 @@ export function parseCommand(text: string): Command | null {
   const m = fold(text.trim()).match(/^!(\S+)\s*(.*)$/)
   if (!m) return null
   const word = m[1]!
-  const arg = m[2]!.trim()
   if (['yo', 'nivel', 'stats', 'heroe', 'me'].includes(word)) return { type: 'me' }
-  if (['tienda', 'shop', 'mejoras'].includes(word)) return { type: 'shop' }
-  if (['comprar', 'buy', 'mejorar'].includes(word)) {
-    const n = Number(arg.split(/\s+/)[0])
-    if (Number.isInteger(n) && n >= 1 && n <= UPGRADE_IDS.length) return { type: 'buy', id: UPGRADE_IDS[n - 1]! }
-    const byName = UPGRADE_IDS.find(id => arg && fold(UPGRADES[id].name).startsWith(arg.split(/\s+/)[0]!))
-    return byName ? { type: 'buy', id: byName } : { type: 'shop' }
-  }
   return null
 }
 
 /* ---------------------------------------------------------------- órdenes del panel */
 
 /** Lo que el panel le pide al overlay (pruebas). El overlay las recoge al mirar la configuración. */
+export type SupportKind = 'sub' | 'gift' | 'bits' | 'superchat'
+export const SUPPORT_KINDS: SupportKind[] = ['sub', 'gift', 'bits', 'superchat']
+
 export type PanelOp =
-  | { type: 'fake'; n: number }
+  /** Bots: `n` héroes de prueba de nivel `level` (0 = al azar entre 1 y 9) que se quedan `minutes` minutos. No se guardan. */
+  | { type: 'fake'; n: number; level: number; minutes: number; p: Platform }
+  /** Un espectador falso escribe en el chat (también vale un comando: !yo, !tienda, !comprar 1). Si no existe, se crea. */
+  | { type: 'say'; name: string; text: string; p: Platform }
+  /** Una sub, un regalo (de `n` subs), bits o un Super Chat de alguien. */
+  | { type: 'support'; kind: SupportKind; n: number; name: string }
   | { type: 'gold'; n: number }
   | { type: 'event'; kind: EventKind | 'all' }
+  /** Salta a la zona `zone` (empezando en 0), a su primera oleada. */
+  | { type: 'zone'; zone: number }
+  /** Da la oleada por superada. */
+  | { type: 'wave' }
+  /** Deja KO a todos los héroes que estén en la barra. */
+  | { type: 'ko' }
+  /** Quita todos los bots. */
+  | { type: 'clearBots' }
   | { type: 'newDay' }
 
 export interface QueuedOp { id: number; at: number; op: PanelOp }
 
+const platformOf = (v: unknown): Platform => (v === 'youtube' || v === 'kick' ? v : 'twitch')
+
 export function sanitizeOp(raw: unknown): PanelOp | null {
   const o = obj(raw)
   switch (o.type) {
-    case 'fake': return { type: 'fake', n: clamp(o.n, 1, 20, 5) }
+    case 'fake': return { type: 'fake', n: clamp(o.n, 1, 30, 5), level: clamp(o.level, 0, 99, 0), minutes: clamp(o.minutes, 1, 600, 3), p: platformOf(o.p) }
+    case 'say': {
+      const name = str(o.name, 40)
+      const text = str(o.text, 200)
+      return name && text ? { type: 'say', name, text, p: platformOf(o.p) } : null
+    }
+    case 'support': return {
+      type: 'support',
+      kind: SUPPORT_KINDS.includes(o.kind as SupportKind) ? (o.kind as SupportKind) : 'sub',
+      n: clamp(o.n, 1, 9999, 1),
+      name: str(o.name, 40) || 'Prueba',
+    }
     case 'gold': return { type: 'gold', n: clamp(o.n, 1, 1e9, 100) }
     case 'event': return { type: 'event', kind: o.kind === 'all' || EVENT_KINDS.includes(o.kind as EventKind) ? (o.kind as EventKind | 'all') : 'frenzy' }
+    case 'zone': return { type: 'zone', zone: clamp(o.zone, 0, 9999, 0) }
+    case 'wave': return { type: 'wave' }
+    case 'ko': return { type: 'ko' }
+    case 'clearBots': return { type: 'clearBots' }
     case 'newDay': return { type: 'newDay' }
     default: return null
   }

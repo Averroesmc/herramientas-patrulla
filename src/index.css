@@ -454,3 +454,9 @@ a.brand { color: inherit; text-decoration: none; }
 .danger-zone { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-3); margin-top: var(--space-5); padding: var(--space-4); border: 1px solid color-mix(in oklab, var(--danger) 35%, var(--border)); border-radius: var(--radius-panel); }
 .danger-zone > div { display: grid; flex: 1 1 16rem; }
 .danger-zone .hint-text { margin-top: 2px; }
+
+/* Panel de pruebas */
+.fields--4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+@media (max-width: 760px) { .fields--4 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.plain-select { height: 40px; padding: 0 12px; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface); color: var(--foreground); font: inherit; font-weight: 600; }
+

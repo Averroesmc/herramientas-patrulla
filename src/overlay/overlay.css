@@ -52,11 +52,21 @@ body.preview { background: repeating-conic-gradient(#1c1c22 0 25%, #141418 0 50%
 .toast.is-small .tx { font-size: 18px; }
 #stage.quiet .toast { transform-origin: 50% 100%; }
 #stage.quiet .toast.on { transform: scale(.8); }
-.shop { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 14px; margin-top: 12px; text-align: left; }
-.shop .item { display: grid; grid-template-columns: 34px 1fr auto; align-items: center; gap: 10px; padding: 8px 12px; background: #1d1d22; opacity: .65; }
-.shop .item.can { opacity: 1; box-shadow: inset 0 0 0 3px var(--gold); }
-.shop .item b { display: grid; place-items: center; height: 34px; background: #0e0e11; color: var(--gold); font-size: 22px; }
-.shop .item span { font-size: 20px; line-height: 1.1; }
-.shop .item span small { color: #c9c9d6; font-size: 15px; }
-.shop .item em { display: block; font-style: normal; color: #c9c9d6; font-size: 15px; }
-.shop .item i { font-style: normal; color: var(--gold); font-size: 20px; }
+/* La tienda de después de cada oleada: a la izquierda, encima de la barra; los avisos suben para no taparla. */
+#shopbox { position: absolute; left: 30px; bottom: calc(var(--bar-b) + var(--bar-h) + 22px); width: 1040px; padding: 12px 18px 16px; z-index: 4; }
+#shopbox .sh { display: flex; align-items: center; gap: 12px; font-size: 26px; font-weight: 700; color: var(--gold); }
+#shopbox .sh .cmd { padding: 0 10px; background: var(--gold); color: #000; font-size: 20px; text-shadow: none; }
+#shopbox .sh .left { margin-left: auto; color: #fff; }
+#shopbox .timer { height: 12px; margin: 8px 0 10px; padding: 2px; }
+#shopbox .timer i { display: block; height: 100%; background: repeating-linear-gradient(90deg, var(--gold) 0 7px, transparent 7px 9px); transition: width .3s linear; }
+.shop { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.shop .item { position: relative; overflow: hidden; display: grid; grid-template-columns: 30px 1fr; grid-template-areas: "n t" "c c" "v v"; align-items: center; gap: 4px 8px; padding: 8px 10px 10px; background: #1d1d22; opacity: .5; }
+.shop .item.can { opacity: 1; }
+.shop .item b { grid-area: n; display: grid; place-items: center; height: 30px; background: #0e0e11; color: var(--gold); font-size: 20px; }
+.shop .item span { grid-area: t; font-size: 18px; line-height: 1.05; }
+.shop .item span small { color: #c9c9d6; font-size: 13px; }
+.shop .item em { display: block; font-style: normal; color: #c9c9d6; font-size: 13px; }
+.shop .item i { grid-area: c; font-style: normal; color: var(--gold); font-size: 18px; }
+.shop .item u { position: absolute; left: 0; bottom: 0; height: 6px; background: var(--ok); text-decoration: none; transition: width .3s; }
+.shop .item s { grid-area: v; min-height: 16px; color: var(--ok); font-size: 14px; text-decoration: none; }
+#stage.shop-open #toasts { bottom: calc(var(--bar-b) + var(--bar-h) + 190px); }
