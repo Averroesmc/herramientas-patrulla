@@ -51,6 +51,11 @@ export class View {
   private readonly toastBox: HTMLDivElement
   private readonly shopBox: HTMLDivElement
   private shopKey = ''
+  private shopOpen = false
+  /** Un aviso que se muestra en la cabecera de la tienda mientras está abierta. */
+  private shopMsg: { title: string; text: string; until: number } | null = null
+  /** La hora del fotograma actual (la del requestAnimationFrame). */
+  private nowT = 0
   private readonly waiting: HTMLDivElement
   private config: Config
   private px = 3
@@ -141,6 +146,7 @@ export class View {
     this.last = now
     this.time += dt
     this.dt = dt
+    this.nowT = now
     this.state = state
     this.sync(state)
     // Si suben muchos de nivel a la vez, sin el texto encima de cada uno (sale el aviso de grupo).
@@ -380,14 +386,22 @@ export class View {
 
   /** La tienda de después de cada oleada: las mejoras que se pueden pagar, los votos de cada una y el tiempo que queda. */
   private drawShop(shop: ShopView | null) {
+    this.shopOpen = !!shop
     this.root.classList.toggle('shop-open', !!shop)
-    if (!shop) { this.shopBox.classList.add('hidden'); this.shopKey = ''; return }
-    const key = `${Math.ceil(shop.left)}|${shop.items.map(i => `${i.votes}${i.can ? 'y' : 'n'}${i.level}`).join(',')}`
+    if (!shop) { this.shopBox.classList.add('hidden'); this.shopKey = ''; this.shopMsg = null; return }
+    // Un aviso (nueva zona, sub, evento…) sustituye un rato al título de la tienda, en vez de ponerse encima.
+    if (this.shopMsg && this.nowT >= this.shopMsg.until) this.shopMsg = null
+    const msg = this.shopMsg
+    const key = `${msg ? msg.title : ''}|${Math.ceil(shop.left)}|${shop.items.map(i => `${i.votes}${i.can ? 'y' : 'n'}${i.level}`).join(',')}`
     if (key === this.shopKey) return
     this.shopKey = key
     const total = shop.items.reduce((a, i) => a + i.votes, 0)
     this.shopBox.classList.remove('hidden')
-    this.shopBox.innerHTML = `<div class="sh">TIENDA <span class="cmd">escribe 1-${shop.items.length} para votar</span><div class="timer slot"><i style="width:${Math.max(0, Math.min(100, (shop.left / shop.total) * 100))}%"></i></div><span class="left">${Math.ceil(shop.left)} s</span></div>
+    const timer = `<div class="timer slot"><i style="width:${Math.max(0, Math.min(100, (shop.left / shop.total) * 100))}%"></i></div><span class="left">${Math.ceil(shop.left)} s</span>`
+    const head = msg
+      ? `<div class="sh msg"><span class="mt">${esc(msg.title)}</span>${msg.text ? `<span class="mx">${esc(msg.text)}</span>` : ''}${timer}</div>`
+      : `<div class="sh">TIENDA <span class="cmd">escribe 1-${shop.items.length} para votar</span>${timer}</div>`
+    this.shopBox.innerHTML = `${head}
       <div class="shop">${shop.items.map(i =>
         `<div class="item${i.can ? ' can' : ''}"><b>${i.n}</b><span>${esc(i.name)} <small>nv ${i.level}</small><em>${esc(i.effect)}</em></span><div class="side"><i>${i.cost ? fmt(i.cost) : 'MÁX'}</i><s>${i.votes ? `${i.votes} ${i.votes === 1 ? 'voto' : 'votos'}` : ''}</s></div><u style="width:${total ? Math.round((i.votes / total) * 100) : 0}%"></u></div>`).join('')}</div>`
   }
@@ -396,6 +410,15 @@ export class View {
     if (now < this.toastUntil) return
     const t = this.toasts.shift()
     if (!t) { if (this.toastBox.firstElementChild?.classList.contains('on')) this.toastBox.firstElementChild.classList.remove('on'); return }
+    if (this.shopOpen) {
+      // Con la tienda abierta, el aviso va en su cabecera (no se pisa con ella ni ocupa más pantalla).
+      const ms = Math.min(t.ms, 4500)
+      this.shopMsg = { title: t.title, text: t.text ?? '', until: now + ms }
+      this.toastUntil = now + ms
+      this.shopKey = ''
+      this.toastBox.firstElementChild?.classList.remove('on')
+      return
+    }
     this.toastUntil = now + t.ms
     const el = document.createElement('div')
     el.className = `toast slab outline is-${t.kind}`
