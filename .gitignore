@@ -28,4 +28,4 @@ dist-ssr
 .dev.vars
 
 # Originales generados con IA (se preparan con scripts/preparar-fondos.py)
-arte/
+/arte/
