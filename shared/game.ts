@@ -401,7 +401,7 @@ export function parseVote(text: string): number | null {
 }
 
 /** Cuánto dura la votación de la tienda después de cada oleada. */
-export const SHOP_SEC = 15
+export const SHOP_SEC = 30
 
 const fold = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
 

@@ -20,6 +20,10 @@ SPRITES = {
 }
 
 
+# Filas de arriba (del original) que se borran: el humo de la chimenea va animado en el juego.
+CORTE_ARRIBA = {"taberna": 228}
+
+
 def quitar_magenta(im: Image.Image) -> Image.Image:
     """Alfa según lo lejos que está cada píxel del magenta: 0 si es magenta, 255 si no se parece."""
     im = im.convert("RGBA")
@@ -48,6 +52,9 @@ def main():
             print("falta", origen)
             continue
         im = quitar_magenta(Image.open(origen))
+        corte = CORTE_ARRIBA.get(nombre, 0)
+        if corte:
+            im.paste((0, 0, 0, 0), (0, 0, im.width, corte))
         caja = im.getchannel("A").point(lambda a: 255 if a > 40 else 0).getbbox()
         im = im.crop(caja)
         alto = round(im.height * ancho / im.width)

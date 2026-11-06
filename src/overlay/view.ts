@@ -15,11 +15,13 @@ const ART_BAND = 120
 const ART_GROUND = 18
 /** Dónde está la puerta de la taberna dibujada, como fracción de su ancho. */
 const TAVERN_DOOR_X = 0.46
+/** X de su chimenea, como fracción del ancho (la boca está arriba del todo del dibujo). */
+const TAVERN_CHIMNEY_X = 0.686
 
 /** Hueco del canvas por encima de la barra, para los números, los avisos de nivel y los bocadillos. */
 const TOP = 130
 const W = 1920
-const HUD_W = 300
+const HUD_W = 392
 const FONT = '"Pixelify Sans", ui-monospace, monospace'
 const NAME_COLOR: Record<HeroView['p'], string> = { twitch: '#d2b8ff', youtube: '#ffa3a3', kick: '#a6ff73', demo: '#d9d9e3' }
 
@@ -54,6 +56,8 @@ export class View {
   private groundY = 0
   private art = new Map<number, HTMLImageElement | null>()
   private sprites = new Map<string, HTMLImageElement | null>()
+  /** Dónde está la boca de la chimenea de la taberna dibujada (de ahí sale el humo). */
+  private chimney = { x: 0, y: 0 }
   private heroes = new Map<string, HeroAnim>()
   private enemies = new Map<number, EnemyAnim>()
   private particles: Particle[] = []
@@ -200,12 +204,12 @@ export class View {
         if (e) { e.flash = 0.09; e.kb = f.crit ? 10 : 3 }
         if (target) {
           if (f.crit) {
-            this.float(target[0], target[1] - 30, `¡-${fmt(f.dmg)}!`, '#ffd23f', 30 * this.k)
+            this.float(target[0], target[1] - 30, `¡-${fmt(f.dmg)}!`, '#ffd23f', 40 * this.k)
             this.burst(target[0], target[1], '#ffd23f', 10, 160)
             this.play('crit', 60, () => sfx.crit())
           } else if (this.normalNumbers < 4 && !this.config.quiet) {
             this.normalNumbers++
-            this.float(target[0] + (Math.random() - 0.5) * 80, target[1] - 20 - Math.random() * 24, `-${fmt(f.dmg)}`, '#ffffff', 17 * this.k)
+            this.float(target[0] + (Math.random() - 0.5) * 80, target[1] - 20 - Math.random() * 24, `-${fmt(f.dmg)}`, '#ffffff', 25 * this.k)
           }
         }
         break
@@ -213,7 +217,7 @@ export class View {
       case 'hurt':
         if (anim && hero) {
           anim.flash = 0.12
-          this.float(anim.shownX, this.heroY(hero) - 18 * this.px, `-${fmt(f.dmg)}`, '#ff6b6b', 17 * this.k)
+          this.float(anim.shownX, this.heroY(hero) - 18 * this.px, `-${fmt(f.dmg)}`, '#ff6b6b', 25 * this.k)
           this.play('hurt', 250, () => sfx.hurt())
         }
         break
@@ -240,7 +244,7 @@ export class View {
       case 'level':
         if (anim && hero) {
           anim.pillar = 1
-          if (!this.crowdLevels) this.float(anim.shownX, this.heroY(hero) - 26 * this.px, `¡NIVEL ${f.level}!`, '#ffe14d', 22 * this.k)
+          if (!this.crowdLevels) this.float(anim.shownX, this.heroY(hero) - 26 * this.px, `¡NIVEL ${f.level}!`, '#ffe14d', 32 * this.k)
         }
         this.levelBatch.push({ name: f.name, level: f.level })
         if (!this.levelAt) this.levelAt = performance.now() + 700
@@ -304,7 +308,7 @@ export class View {
             this.meteors.push({ x0: x1 + 260 + Math.random() * 120, y0: -40 - i * 40 - j * 60, x1, y1: c[1], t: -(i * 0.15 + j * 0.2), dur: 0.55, dmg: j === 0 ? h.dmg : 0 })
           }
         })
-        if (!f.hits.length) this.float(W / 2, TOP + this.H / 2, '¡No había enemigos!', '#ffb347', 22 * this.k)
+        if (!f.hits.length) this.float(W / 2, TOP + this.H / 2, '¡No había enemigos!', '#ffb347', 32 * this.k)
         this.play('meteor', 300, () => sfx.meteor())
         break
       case 'goldrain':
@@ -312,7 +316,7 @@ export class View {
           const x = 220 + Math.random() * (W - HUD_W - 300)
           this.coins.push({ x0: x, y0: TOP - 40 - Math.random() * 120, t: -Math.random() * 1.2, dur: 1.1 })
         }
-        this.float(W / 2, TOP + this.H * 0.45, `+${fmt(f.gold)} de oro`, '#ffe14d', 30 * this.k)
+        this.float(W / 2, TOP + this.H * 0.45, `+${fmt(f.gold)} de oro`, '#ffe14d', 40 * this.k)
         this.play('goldrain', 300, () => sfx.goldrain())
         break
       case 'blessing':
@@ -438,7 +442,7 @@ export class View {
       if (was < m.dur && m.t >= m.dur) {
         this.burst(m.x1, m.y1, '#ff7a1f', 18, 260)
         this.burst(m.x1, m.y1, '#ffe14d', 10, 180)
-        if (m.dmg) this.float(m.x1, m.y1 - 34, `¡-${fmt(m.dmg)}!`, '#ff9a3d', 30 * this.k)
+        if (m.dmg) this.float(m.x1, m.y1 - 34, `¡-${fmt(m.dmg)}!`, '#ff9a3d', 40 * this.k)
         this.play('boom', 90, () => sfx.crit())
       }
     }
@@ -450,9 +454,13 @@ export class View {
     this.coins = this.coins.filter(c => c.t < c.dur)
     if (this.fading) { this.fading.t -= dt; if (this.fading.t <= 0) this.fading = null }
     // Humo de la chimenea.
-    if (Math.random() < dt * 3 && this.particles.length < 260 && !this.sprite('taberna')) {
+    if (Math.random() < dt * 4 && this.particles.length < 260) {
+      const art = !!this.sprite('taberna')
       const x0 = DOOR_X - 20 * this.px
-      this.particles.push({ x: x0 + 30 * this.px, y: this.groundY - 30 * this.px, vx: 6 + Math.random() * 8, vy: -18 - Math.random() * 10, life: 0, max: 2.6, color: 'rgba(220,220,230,.55)', size: this.px * 2, g: -2 })
+      const sx = art ? this.chimney.x : x0 + 30 * this.px
+      const sy = art ? this.chimney.y : this.groundY - 30 * this.px
+      // Bolitas de humo que suben, se mecen con el viento y se van agrandando y desvaneciendo.
+      this.particles.push({ x: sx + (Math.random() - 0.5) * 6, y: sy, vx: 8 + Math.random() * 10, vy: -26 - Math.random() * 14, life: 0, max: 2.8 + Math.random() * 0.8, color: 'rgba(235,235,242,.7)', size: this.px * (2 + Math.round(Math.random())), g: -6 })
     }
   }
 
@@ -716,15 +724,17 @@ export class View {
     const art = this.sprite('taberna')
     if (art) {
       // La casa dibujada: la puerta (46 % del ancho) queda en DOOR_X, por donde entran y salen los héroes.
-      const k = this.H / ART_BAND
+      // Cabe dentro de la barra (la chimenea no sobresale); el humo sale animado de ella.
+      const k = Math.min(this.H / ART_BAND, (this.H - 6) / art.naturalHeight)
       const w = Math.round(art.naturalWidth * k)
       const h = Math.round(art.naturalHeight * k)
       const x = Math.round(DOOR_X - w * TAVERN_DOOR_X)
       ctx.drawImage(art, x, g - h, w, h)
+      this.chimney = { x: x + w * TAVERN_CHIMNEY_X, y: g - h + 2 }
       if (this.doorOpen > 0) {
         ctx.globalAlpha = Math.min(1, this.doorOpen * 2.5) * 0.85
         ctx.fillStyle = '#ffcf6b'
-        ctx.fillRect(Math.round(x + w * 0.352), Math.round(g - h + h * 0.56), Math.round(w * 0.233), Math.round(h * 0.38))
+        ctx.fillRect(Math.round(x + w * 0.352), Math.round(g - h + h * 0.527), Math.round(w * 0.233), Math.round(h * 0.41))
         ctx.globalAlpha = 1
       }
       if (state.tavern > 0 && this.icons) this.tavernCount(state.tavern, x + 6 * k, g - h + 10 * k)
@@ -762,12 +772,12 @@ export class View {
     if (!this.icons) return
     const ctx = this.ctx
     const label = `×${n}`
-    ctx.font = `700 ${Math.round(18 * this.k)}px ${FONT}`
+    ctx.font = `700 ${Math.round(26 * this.k)}px ${FONT}`
     const tw = ctx.measureText(label).width
     ctx.fillStyle = 'rgba(10,10,14,.82)'
     ctx.fillRect(bx - 4, by - 4, this.icons.mug.width + tw + 18, this.icons.mug.height + 8)
     ctx.drawImage(this.icons.mug, bx + 2, by)
-    this.text(label, bx + this.icons.mug.width + 8, by + this.icons.mug.height - 2, 18 * this.k, '#ffe14d')
+    this.text(label, bx + this.icons.mug.width + 8, by + this.icons.mug.height - 2, 26 * this.k, '#ffe14d')
   }
 
   /* ---------------- héroes y enemigos */
@@ -873,7 +883,7 @@ export class View {
 
   /** Los nombres: de delante hacia atrás, y solo los que no se pisan con otro. */
   private drawNames(order: HeroView[]) {
-    const size = 15 * this.k
+    const size = 23 * this.k
     const rects: [number, number, number][] = []
     const ctx = this.ctx
     ctx.font = `700 ${Math.round(size)}px ${FONT}`
@@ -901,7 +911,7 @@ export class View {
     for (const h of order) {
       const a = this.heroes.get(h.k)
       if (!a?.bubble) continue
-      const size = 17 * this.k
+      const size = 26 * this.k
       ctx.font = `700 ${Math.round(size)}px ${FONT}`
       const w = ctx.measureText(a.bubble.text).width + 20
       const x = Math.min(W - HUD_W - w / 2 - 20, Math.max(w / 2 + 6, a.shownX))
