@@ -32,6 +32,8 @@ interface HeroAnim {
   swing: number; melee: boolean; flash: number; pillar: number
   bubble: { text: string; until: number } | null
   koAt: number
+  /** Su nombre: la fila que ocupa (-1 si no se ve), su altura suavizada y su transparencia. */
+  nameRow: number; nameY: number; nameA: number
 }
 interface EnemyAnim { shownX: number; flash: number; kb: number; last: { kind: RenderState['enemies'][number]['kind']; tint: string; x: number } }
 interface Particle { x: number; y: number; vx: number; vy: number; life: number; max: number; color: string; size: number; g: number }
@@ -80,6 +82,7 @@ export class View {
   private hudText = ''
   private goldPulse = 0
   private time = 0
+  private dt = 0.016
   private last = 0
   private sounds = new Map<string, number>()
   private icons: { coin: HTMLCanvasElement; mug: HTMLCanvasElement } | null = null
@@ -137,6 +140,7 @@ export class View {
     const dt = this.last ? Math.min(0.1, (now - this.last) / 1000) : 0.016
     this.last = now
     this.time += dt
+    this.dt = dt
     this.state = state
     this.sync(state)
     // Si suben muchos de nivel a la vez, sin el texto encima de cada uno (sale el aviso de grupo).
@@ -159,7 +163,7 @@ export class View {
       const tier = heroTier(h.level)
       let a = this.heroes.get(h.k)
       if (!a) {
-        a = { shownX: h.x, prevX: h.x, sprite: heroSprite(h.seed, tier, this.px), tier, dir: 1, swing: 0, melee: true, flash: 0, pillar: 0, bubble: null, koAt: 0 }
+        a = { shownX: h.x, prevX: h.x, sprite: heroSprite(h.seed, tier, this.px), tier, dir: 1, swing: 0, melee: true, flash: 0, pillar: 0, bubble: null, koAt: 0, nameRow: -1, nameY: 0, nameA: 0 }
         this.heroes.set(h.k, a)
       }
       if (a.tier !== tier) { a.tier = tier; a.sprite = heroSprite(h.seed, tier, this.px) }
@@ -383,10 +387,9 @@ export class View {
     this.shopKey = key
     const total = shop.items.reduce((a, i) => a + i.votes, 0)
     this.shopBox.classList.remove('hidden')
-    this.shopBox.innerHTML = `<div class="sh">TIENDA <span class="cmd">escribe 1-${shop.items.length} para votar</span><span class="left">${Math.ceil(shop.left)} s</span></div>
-      <div class="timer slot"><i style="width:${Math.max(0, Math.min(100, (shop.left / shop.total) * 100))}%"></i></div>
+    this.shopBox.innerHTML = `<div class="sh">TIENDA <span class="cmd">escribe 1-${shop.items.length} para votar</span><div class="timer slot"><i style="width:${Math.max(0, Math.min(100, (shop.left / shop.total) * 100))}%"></i></div><span class="left">${Math.ceil(shop.left)} s</span></div>
       <div class="shop">${shop.items.map(i =>
-        `<div class="item${i.can ? ' can' : ''}"><b>${i.n}</b><span>${esc(i.name)} <small>nv ${i.level}</small><em>${esc(i.effect)}</em></span><i>${i.cost ? fmt(i.cost) : 'MÁX'}</i><u style="width:${total ? Math.round((i.votes / total) * 100) : 0}%"></u><s>${i.votes ? `${i.votes} ${i.votes === 1 ? 'voto' : 'votos'}` : ''}</s></div>`).join('')}</div>`
+        `<div class="item${i.can ? ' can' : ''}"><b>${i.n}</b><span>${esc(i.name)} <small>nv ${i.level}</small><em>${esc(i.effect)}</em></span><div class="side"><i>${i.cost ? fmt(i.cost) : 'MÁX'}</i><s>${i.votes ? `${i.votes} ${i.votes === 1 ? 'voto' : 'votos'}` : ''}</s></div><u style="width:${total ? Math.round((i.votes / total) * 100) : 0}%"></u></div>`).join('')}</div>`
   }
 
   private showToasts(now: number) {
@@ -815,7 +818,8 @@ export class View {
       ctx.globalAlpha = 1
     }
 
-    const frame = moving ? (Math.floor(this.time * 8 + (h.seed % 7)) % 2 ? 1 : 2) : 0
+    let frame = moving ? (Math.floor(this.time * 8 + (h.seed % 7)) % 2 ? 1 : 2) : 0
+    if (s.art && a.swing > 0) frame = 3 // la pose de ataque, con la espada alzada
     const bob = moving && frame === 2 ? -P : 0
     const lunge = a.swing > 0 && a.melee ? Math.sin((1 - a.swing / 0.22) * Math.PI) * 4 * P : 0
     ctx.save()
@@ -827,19 +831,21 @@ export class View {
     ctx.drawImage(s.frames[frame]!, -s.w / 2, -s.h)
     ctx.shadowBlur = 0
     if (a.flash > 0) { ctx.globalAlpha = 0.8; ctx.drawImage(s.white[frame]!, -s.w / 2, -s.h); ctx.globalAlpha = 1 }
-    // La espada, que gira al pegar.
-    const hx = -s.w / 2 + s.hand[0] * P
-    const hy = -s.h + s.hand[1] * P
-    const swingT = a.swing > 0 ? 1 - a.swing / 0.22 : -1
-    const angle = swingT >= 0 ? -2.0 + swingT * 2.7 : -0.9 + Math.sin(this.time * 2 + h.seed) * 0.05
-    ctx.translate(hx, hy)
-    ctx.rotate(angle)
-    ctx.fillStyle = s.hilt
-    ctx.fillRect(-P, -P * 1.5, P * 2, P)
-    ctx.fillStyle = s.blade
-    ctx.fillRect(-P / 2, -P * 8.5, P, P * 7)
-    ctx.fillStyle = shade(s.blade, -0.35)
-    ctx.fillRect(0, -P * 8.5, P / 2, P * 7)
+    if (!s.art) {
+      // La espada dibujada con código, que gira al pegar (los héroes dibujados la traen en su dibujo).
+      const hx = -s.w / 2 + s.hand[0] * P
+      const hy = -s.h + s.hand[1] * P
+      const swingT = a.swing > 0 ? 1 - a.swing / 0.22 : -1
+      const angle = swingT >= 0 ? -2.0 + swingT * 2.7 : -0.9 + Math.sin(this.time * 2 + h.seed) * 0.05
+      ctx.translate(hx, hy)
+      ctx.rotate(angle)
+      ctx.fillStyle = s.hilt
+      ctx.fillRect(-P, -P * 1.5, P * 2, P)
+      ctx.fillStyle = s.blade
+      ctx.fillRect(-P / 2, -P * 8.5, P, P * 7)
+      ctx.fillStyle = shade(s.blade, -0.35)
+      ctx.fillRect(0, -P * 8.5, P / 2, P * 7)
+    }
     ctx.restore()
 
     if (h.hp < h.maxHp) {
@@ -884,26 +890,42 @@ export class View {
   /** Los nombres: de delante hacia atrás, y solo los que no se pisan con otro. */
   private drawNames(order: HeroView[]) {
     const size = 23 * this.k
-    const rects: [number, number, number][] = []
     const ctx = this.ctx
     ctx.font = `700 ${Math.round(size)}px ${FONT}`
-    const list = order.slice().sort((a, b) => b.x - a.x)
+    // Cada nombre conserva su fila mientras no choque con otro, y se mueve y se desvanece con suavidad:
+    // así, con mucha gente, no saltan de fila ni parpadean al moverse los héroes.
+    const ROWS = 4
+    const rowY = (h: HeroView, r: number) => this.heroY(h) - (h.ko ? 9 * this.px : 20 * this.px) - r * (size + 4)
+    const list = order.filter(h => !h.leaving && this.heroes.has(h.k))
+      .sort((p, q) => (this.heroes.get(q.k)!.nameRow >= 0 ? 1 : 0) - (this.heroes.get(p.k)!.nameRow >= 0 ? 1 : 0) || q.x - p.x)
+    const placed: [number, number, number][] = []
+    const follow = Math.min(1, this.dt * 12)
     for (const h of list) {
-      const a = this.heroes.get(h.k)
-      if (!a || h.leaving) continue
-      const w = ctx.measureText(h.name).width + 6
+      const a = this.heroes.get(h.k)!
+      const w = ctx.measureText(h.name).width + 10
       const x = a.shownX
-      const lift = h.ko ? 9 * this.px : 18 * this.px + (h.hp < h.maxHp ? 3 * this.px : 0)
-      let y = this.heroY(h) - lift
-      let ok = !rects.some(([rx, ry, rw]) => Math.abs(rx - x) < (rw + w) / 2 && Math.abs(ry - y) < size)
-      if (!ok) {
-        y -= size + 2
-        ok = !rects.some(([rx, ry, rw]) => Math.abs(rx - x) < (rw + w) / 2 && Math.abs(ry - y) < size)
+      let row = -1
+      for (const r of [a.nameRow, ...Array.from({ length: ROWS }, (_, i) => i)]) {
+        if (r < 0) continue
+        const y = rowY(h, r)
+        if (!placed.some(([px, py, pw]) => Math.abs(py - y) < size && Math.abs(px - x) < (pw + w) / 2)) { row = r; break }
       }
-      if (!ok) continue
-      rects.push([x, y, w])
-      this.text(h.name, x, y, size, NAME_COLOR[h.p], 'center')
+      if (row >= 0) {
+        const y = rowY(h, row)
+        placed.push([x, y, w])
+        a.nameY = a.nameRow < 0 && a.nameA < 0.05 ? y : a.nameY + (y - a.nameY) * follow
+        a.nameRow = row
+        a.nameA += (1 - a.nameA) * follow
+      } else {
+        a.nameRow = -1
+        a.nameA += (0 - a.nameA) * follow
+      }
+      if (a.nameA > 0.04) {
+        ctx.globalAlpha = Math.min(1, a.nameA)
+        this.text(h.name, x, a.nameY, size, NAME_COLOR[h.p], 'center')
+      }
     }
+    ctx.globalAlpha = 1
   }
 
   private drawBubbles(order: HeroView[]) {

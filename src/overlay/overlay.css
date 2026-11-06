@@ -52,21 +52,22 @@ body.preview { background: repeating-conic-gradient(#1c1c22 0 25%, #141418 0 50%
 .toast.is-small .tx { font-size: 26px; }
 #stage.quiet .toast { transform-origin: 50% 100%; }
 #stage.quiet .toast.on { transform: scale(.8); }
-/* La tienda de después de cada oleada: en el centro, encima de la barra; los avisos suben para no taparla. */
-#shopbox { position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(var(--bar-b) + var(--bar-h) + 26px); width: 1560px; padding: 16px 24px 22px; z-index: 4; }
-#shopbox .sh { display: flex; align-items: center; gap: 16px; font-size: 44px; font-weight: 700; color: var(--gold); }
-#shopbox .sh .cmd { padding: 0 14px; background: var(--gold); color: #000; font-size: 32px; text-shadow: none; }
-#shopbox .sh .left { margin-left: auto; color: #fff; }
-#shopbox .timer { height: 16px; margin: 10px 0 14px; padding: 3px; }
+/* La tienda de después de cada oleada: en el centro, encima de la barra, compacta; los avisos suben para no taparla. */
+#shopbox { position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(var(--bar-b) + var(--bar-h) + 20px); width: 1500px; padding: 10px 16px 14px; z-index: 4; }
+#shopbox .sh { display: flex; align-items: center; gap: 16px; margin-bottom: 10px; font-size: 44px; font-weight: 700; color: var(--gold); line-height: 1; }
+#shopbox .sh .cmd { padding: 2px 12px; background: var(--gold); color: #000; font-size: 32px; text-shadow: none; white-space: nowrap; }
+#shopbox .sh .left { min-width: 90px; text-align: right; color: #fff; }
+#shopbox .timer { flex: 1; height: 16px; padding: 3px; }
 #shopbox .timer i { display: block; height: 100%; background: repeating-linear-gradient(90deg, var(--gold) 0 8px, transparent 8px 10px); transition: width .3s linear; }
-.shop { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
-.shop .item { position: relative; overflow: hidden; display: grid; grid-template-columns: 46px 1fr; grid-template-areas: "n t" "c c" "v v"; align-items: center; gap: 6px 12px; padding: 12px 14px 16px; background: #1d1d22; opacity: .5; }
+.shop { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.shop .item { position: relative; overflow: hidden; display: grid; grid-template-columns: 46px 1fr auto; align-items: center; gap: 10px; padding: 8px 12px 12px; background: #1d1d22; opacity: .5; }
 .shop .item.can { opacity: 1; }
-.shop .item b { grid-area: n; display: grid; place-items: center; height: 46px; background: #0e0e11; color: var(--gold); font-size: 32px; }
-.shop .item span { grid-area: t; font-size: 30px; line-height: 1.05; }
-.shop .item span small { color: #c9c9d6; font-size: 20px; }
+.shop .item b { display: grid; place-items: center; height: 46px; background: #0e0e11; color: var(--gold); font-size: 32px; }
+.shop .item > span { font-size: 30px; line-height: 1.05; }
+.shop .item > span small { color: #c9c9d6; font-size: 20px; }
 .shop .item em { display: block; font-style: normal; color: #c9c9d6; font-size: 21px; margin-top: 2px; }
-.shop .item i { grid-area: c; font-style: normal; color: var(--gold); font-size: 30px; }
-.shop .item u { position: absolute; left: 0; bottom: 0; height: 9px; background: var(--ok); text-decoration: none; transition: width .3s; }
-.shop .item s { grid-area: v; min-height: 24px; color: var(--ok); font-size: 24px; text-decoration: none; }
-#stage.shop-open #toasts { bottom: calc(var(--bar-b) + var(--bar-h) + 300px); }
+.shop .item .side { display: grid; justify-items: end; gap: 2px; }
+.shop .item .side i { font-style: normal; color: var(--gold); font-size: 30px; }
+.shop .item .side s { min-height: 24px; color: var(--ok); font-size: 24px; text-decoration: none; white-space: nowrap; }
+.shop .item u { position: absolute; left: 0; bottom: 0; height: 8px; background: var(--ok); text-decoration: none; transition: width .3s; }
+#stage.shop-open #toasts { bottom: calc(var(--bar-b) + var(--bar-h) + 190px); }

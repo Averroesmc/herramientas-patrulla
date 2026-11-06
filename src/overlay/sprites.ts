@@ -4,6 +4,7 @@
  * Los colores de cada héroe salen de su nombre, así cada persona tiene siempre el mismo aspecto.
  */
 import type { EnemyKind } from '../../shared/game'
+import { artEnemy, artHero } from './arte'
 
 type RGB = [number, number, number]
 const hexRgb = (h: string): RGB => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16)) as RGB
@@ -61,13 +62,15 @@ const TUNIC = ['#d9433a', '#2f80ed', '#27ae60', '#f2994a', '#9b51e0', '#e84393',
 const PANTS = ['#3a3a52', '#4a3426', '#2d4a3a', '#2a2f45', '#503a5a']
 
 /** Las piezas de un héroe: sus colores y su mano (donde se agarra la espada), en píxeles del dibujo. */
-export interface HeroSprite { frames: HTMLCanvasElement[]; white: HTMLCanvasElement[]; w: number; h: number; hand: [number, number]; blade: string; hilt: string }
+export interface HeroSprite { frames: HTMLCanvasElement[]; white: HTMLCanvasElement[]; w: number; h: number; hand: [number, number]; blade: string; hilt: string; /** Dibujado (la espada va en su dibujo y tiene pose de ataque, la 3). */ art?: boolean }
 
 export const HERO_W = 12
 export const HERO_H = 16
 
 export function heroSprite(seed: number, tier: number, px: number): HeroSprite {
   const pick = <T,>(list: T[], salt: number) => list[Math.floor(seed / salt) % list.length]!
+  const drawn = artHero(px, tier, { hair: pick(HAIR, 7), skin: pick(SKIN, 97), tunic: pick(TUNIC, 1), pants: pick(PANTS, 389), cape: shade(pick(TUNIC, 2593), -0.15) })
+  if (drawn) return { ...drawn, hand: [0, 0], blade: '', hilt: '', art: true }
   const tunic = tier >= 3 ? '#f0c419' : pick(TUNIC, 1)
   const colors: Record<string, string> = {
     h: pick(HAIR, 7), s: pick(SKIN, 97), e: '#1a1a24',
@@ -251,6 +254,8 @@ export function enemySprite(kind: EnemyKind, tint: string, px: number): EnemySpr
   const key = `${kind}|${tint}|${px}`
   const hit = enemyCache.get(key)
   if (hit) return hit
+  const drawn = artEnemy(kind, tint, px)
+  if (drawn) { enemyCache.set(key, drawn); return drawn }
   const bone = kind === 'skeleton'
   const colors: Record<string, string> = {
     o: '#14121a', b: tint, l: shade(tint, 0.45), d: shade(tint, -0.3), e: '#ffffff', p: '#14121a',

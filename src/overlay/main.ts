@@ -11,6 +11,7 @@
  */
 import './overlay.css'
 import { boot, HttpError, loadHeroes, poll, save, type Boot } from './api'
+import { preloadArt } from './arte'
 import { ChatReader } from './chat'
 import { Game, type Fx, type LineIn, type RenderState, type SupportIn } from './game'
 import { View } from './view'
@@ -50,6 +51,7 @@ async function first(): Promise<Boot | null> {
 
 async function main() {
   await document.fonts?.load('16px "Pixelify Sans"').catch(() => undefined)
+  await preloadArt() // los héroes y enemigos dibujados, antes de empezar
   const b = await first()
   if (!b) return
   let config = b.config
