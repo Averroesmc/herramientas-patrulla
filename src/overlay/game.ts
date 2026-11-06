@@ -56,6 +56,8 @@ export interface ShopView { items: ShopItem[]; left: number; total: number }
 export interface HeroView {
   k: string; name: string; p: Platform | 'demo'; level: number; x: number; row: number
   hp: number; maxHp: number; ko: boolean; leaving: boolean; seed: number; target: boolean
+  /** Ha escrito hace poco (se resalta su nombre). */
+  spoke: boolean
 }
 export interface EnemyView { id: number; kind: EnemyKind; tint: string; x: number; hp: number; maxHp: number }
 
@@ -457,7 +459,7 @@ export class Game {
       if (!h.onField) continue
       heroes.push({
         k: h.rec.k, name: h.rec.name, p: h.demo ? 'demo' : h.rec.p, level: h.rec.level, x: h.x, row: h.row,
-        hp: h.hp, maxHp: this.maxHp(h), ko: h.ko > 0, leaving: h.leaving, seed: h.seed, target: h.rec.k === victim,
+        hp: h.hp, maxHp: this.maxHp(h), ko: h.ko > 0, leaving: h.leaving, seed: h.seed, target: h.rec.k === victim, spoke: this.now - h.lastSpoke < 6000,
       })
     }
     let tavern = 0

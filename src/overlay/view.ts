@@ -818,9 +818,10 @@ export class View {
       ctx.globalAlpha = 1
     }
 
-    let frame = moving ? (Math.floor(this.time * 8 + (h.seed % 7)) % 2 ? 1 : 2) : 0
+    // Andar: paso, postura de pie, paso contrario, postura de pie… (sin la de pie, los dos pasos seguidos parecen saltos).
+    let frame = moving ? (s.art ? [1, 0, 2, 0][Math.floor(this.time * 7 + (h.seed % 4)) % 4]! : (Math.floor(this.time * 8 + (h.seed % 7)) % 2 ? 1 : 2)) : 0
     if (s.art && a.swing > 0) frame = 3 // la pose de ataque, con la espada alzada
-    const bob = moving && frame === 2 ? -P : 0
+    const bob = !s.art && moving && frame === 2 ? -P : 0
     const lunge = a.swing > 0 && a.melee ? Math.sin((1 - a.swing / 0.22) * Math.PI) * 4 * P : 0
     ctx.save()
     ctx.translate(x + lunge * a.dir, feet + bob)
@@ -894,10 +895,12 @@ export class View {
     ctx.font = `700 ${Math.round(size)}px ${FONT}`
     // Cada nombre conserva su fila mientras no choque con otro, y se mueve y se desvanece con suavidad:
     // así, con mucha gente, no saltan de fila ni parpadean al moverse los héroes.
-    const ROWS = 4
-    const rowY = (h: HeroView, r: number) => this.heroY(h) - (h.ko ? 9 * this.px : 20 * this.px) - r * (size + 4)
+    const ROWS = 3
+    const headY = (h: HeroView) => this.heroY(h) - (this.heroes.get(h.k)?.sprite.h ?? 18 * this.px)
+    const rowY = (h: HeroView, r: number) => (h.ko ? this.heroY(h) - 9 * this.px : headY(h) - 8) - r * (size + 4)
+    // Primero quien acaba de escribir (su nombre siempre se ve, resaltado), luego los que ya tenían nombre, de delante hacia atrás.
     const list = order.filter(h => !h.leaving && this.heroes.has(h.k))
-      .sort((p, q) => (this.heroes.get(q.k)!.nameRow >= 0 ? 1 : 0) - (this.heroes.get(p.k)!.nameRow >= 0 ? 1 : 0) || q.x - p.x)
+      .sort((p, q) => Number(q.spoke) - Number(p.spoke) || (this.heroes.get(q.k)!.nameRow >= 0 ? 1 : 0) - (this.heroes.get(p.k)!.nameRow >= 0 ? 1 : 0) || q.x - p.x)
     const placed: [number, number, number][] = []
     const follow = Math.min(1, this.dt * 12)
     for (const h of list) {
@@ -922,7 +925,16 @@ export class View {
       }
       if (a.nameA > 0.04) {
         ctx.globalAlpha = Math.min(1, a.nameA)
-        this.text(h.name, x, a.nameY, size, NAME_COLOR[h.p], 'center')
+        const color = h.spoke ? '#ffe14d' : NAME_COLOR[h.p]
+        // Si el nombre está en una fila de arriba, una rayita lo une a la cabeza de su héroe.
+        const top = headY(h) - 3
+        if (!h.ko && a.nameY < top - size * 1.05) {
+          ctx.fillStyle = '#000'
+          ctx.fillRect(Math.round(x) - 2, Math.round(a.nameY + 6), 4, Math.round(top - a.nameY - 6))
+          ctx.fillStyle = color
+          ctx.fillRect(Math.round(x) - 1, Math.round(a.nameY + 6), 2, Math.round(top - a.nameY - 6))
+        }
+        this.text(h.name, x, a.nameY, h.spoke ? size * 1.1 : size, color, 'center')
       }
     }
     ctx.globalAlpha = 1
