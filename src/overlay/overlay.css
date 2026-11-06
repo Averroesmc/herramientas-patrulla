@@ -71,7 +71,7 @@ body.preview { background: repeating-conic-gradient(#1c1c22 0 25%, #141418 0 50%
 .shop .item .side s { min-height: 24px; color: var(--ok); font-size: 24px; text-decoration: none; white-space: nowrap; }
 .shop .item u { position: absolute; left: 0; bottom: 0; height: 8px; background: var(--ok); text-decoration: none; transition: width .3s; }
 /* Con la tienda abierta, los avisos van en su cabecera (.sh.msg), no encima. */
-#shopbox .sh.msg { animation: msgpop .35s cubic-bezier(.3, 1.5, .5, 1); }
+#shopbox .sh.msg.pop { animation: msgpop .35s cubic-bezier(.3, 1.5, .5, 1); }
 #shopbox .sh.msg .mt { white-space: nowrap; }
 #shopbox .sh.msg .mx { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #fff; font-size: 32px; }
 #shopbox .sh.msg .timer { min-width: 120px; }

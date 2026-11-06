@@ -53,7 +53,7 @@ export class View {
   private shopKey = ''
   private shopOpen = false
   /** Un aviso que se muestra en la cabecera de la tienda mientras está abierta. */
-  private shopMsg: { title: string; text: string; until: number } | null = null
+  private shopMsg: { title: string; text: string; until: number; shown: boolean } | null = null
   /** La hora del fotograma actual (la del requestAnimationFrame). */
   private nowT = 0
   private readonly waiting: HTMLDivElement
@@ -399,8 +399,9 @@ export class View {
     this.shopBox.classList.remove('hidden')
     const timer = `<div class="timer slot"><i style="width:${Math.max(0, Math.min(100, (shop.left / shop.total) * 100))}%"></i></div><span class="left">${Math.ceil(shop.left)} s</span>`
     const head = msg
-      ? `<div class="sh msg"><span class="mt">${esc(msg.title)}</span>${msg.text ? `<span class="mx">${esc(msg.text)}</span>` : ''}${timer}</div>`
+      ? `<div class="sh msg${msg.shown ? '' : ' pop'}"><span class="mt">${esc(msg.title)}</span>${msg.text ? `<span class="mx">${esc(msg.text)}</span>` : ''}${timer}</div>`
       : `<div class="sh">TIENDA <span class="cmd">escribe 1-${shop.items.length} para votar</span>${timer}</div>`
+    if (msg) msg.shown = true // el efecto de aparición solo se hace la primera vez, no en cada redibujado (parpadeaba)
     this.shopBox.innerHTML = `${head}
       <div class="shop">${shop.items.map(i =>
         `<div class="item${i.can ? ' can' : ''}"><b>${i.n}</b><span>${esc(i.name)} <small>nv ${i.level}</small><em>${esc(i.effect)}</em></span><div class="side"><i>${i.cost ? fmt(i.cost) : 'MÁX'}</i><s>${i.votes ? `${i.votes} ${i.votes === 1 ? 'voto' : 'votos'}` : ''}</s></div><u style="width:${total ? Math.round((i.votes / total) * 100) : 0}%"></u></div>`).join('')}</div>`
@@ -413,7 +414,7 @@ export class View {
     if (this.shopOpen) {
       // Con la tienda abierta, el aviso va en su cabecera (no se pisa con ella ni ocupa más pantalla).
       const ms = Math.min(t.ms, 4500)
-      this.shopMsg = { title: t.title, text: t.text ?? '', until: now + ms }
+      this.shopMsg = { title: t.title, text: t.text ?? '', until: now + ms, shown: false }
       this.toastUntil = now + ms
       this.shopKey = ''
       this.toastBox.firstElementChild?.classList.remove('on')
