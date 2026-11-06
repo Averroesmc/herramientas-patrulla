@@ -1,0 +1,19 @@
+# Cloudflare Workers (ver README, «Publicarlo»). Página: patrulla.averroeshosting.com
+name = "herramientas-patrulla"
+main = "worker/index.ts"
+compatibility_date = "2026-09-01"
+# YOUTUBE_API_KEY se pone en el panel de Cloudflare; keep_vars evita que cada publicación la borre.
+keep_vars = true
+
+[assets]
+directory = "./dist"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+# El panel pasa por el Worker para pedir la sesión; el overlay (/o/<clave>) y la API, también.
+run_worker_first = ["/", "/index.html", "/api/*", "/o/*"]
+
+# La misma base de datos de herramientas: la sesión de Discord, los permisos y las tablas de la patrulla.
+[[d1_databases]]
+binding = "DB"
+database_name = "herramientas"
+database_id = "d6db2b05-1324-42cc-9355-37a4f7af885c"

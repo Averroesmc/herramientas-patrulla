@@ -1,0 +1,62 @@
+/* El overlay de OBS: escena de 1920×1080 transparente; la barra va abajo. Estilo de piedra pixelada de retos. */
+:root { --gold: #ffe14d; --ok: #5ee37a; --bad: #ff5a5a; }
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+body.preview { background: repeating-conic-gradient(#1c1c22 0 25%, #141418 0 50%) 0 0 / 48px 48px; }
+#stage { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; transform-origin: 0 0; overflow: hidden;
+  font-family: 'Pixelify Sans', ui-monospace, monospace; color: #fff; --k: 1; --bar-h: 120px; --bar-b: 0px; }
+.hidden { display: none !important; }
+.broken { display: inline-block; margin: 40px; padding: 24px; background: #000c; color: #fff; font: 32px sans-serif; }
+
+/* Texto legible encima del juego: contorno negro */
+.outline { text-shadow: 3px 0 #000, -3px 0 #000, 0 3px #000, 0 -3px #000, 3px 3px #000, -3px -3px #000, 3px -3px #000, -3px 3px #000; }
+/* Panel con relieve pixelado (piedra oscura) y hueco hundido */
+.slab { background: #2b2b31; box-shadow: inset 6px 6px 0 #6a6a76, inset -6px -6px 0 #121216, 0 0 0 6px #050507; }
+.slot { background: #1d1d22; box-shadow: inset 4px 4px 0 #0e0e11, inset -4px -4px 0 #4b4b55; }
+
+/* La barra (canvas): ocupa todo el ancho y asoma por arriba para los números y los avisos de nivel. */
+#bar { position: absolute; left: 0; bottom: var(--bar-b); width: 1920px; image-rendering: pixelated; }
+
+/* Marcador: a la derecha, dentro de la barra */
+#hud { position: absolute; right: 18px; bottom: calc(var(--bar-b) + 12px); width: 288px; height: calc(var(--bar-h) - 24px);
+  display: grid; grid-template-rows: auto auto 1fr; align-content: center; gap: calc(6px * var(--k)); padding: calc(10px * var(--k)) 18px; z-index: 3;
+  font-size: calc(21px * var(--k)); font-weight: 700; line-height: 1; }
+#hud .hz { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; white-space: nowrap; }
+#hud .zn { overflow: hidden; text-overflow: ellipsis; color: #fff; }
+#hud .st { color: var(--gold); }
+#hud .hm { height: calc(14px * var(--k)); padding: 3px; }
+#hud .hm i { display: block; height: 100%; width: 0; background: repeating-linear-gradient(90deg, var(--gold) 0 7px, transparent 7px 9px); transition: width .5s; }
+#hud .hr { display: flex; justify-content: space-between; align-items: center; gap: 8px; white-space: nowrap; }
+#hud .gold { display: inline-flex; align-items: center; gap: 8px; color: var(--gold); transition: transform .15s; }
+#hud .gold canvas { width: calc(18px * var(--k)); height: calc(18px * var(--k)); image-rendering: pixelated; }
+#hud.pulse .gold { transform: scale(1.12); }
+#hud .day { color: #c9c9d6; font-size: .85em; }
+#hud .fr { color: #ff8a3d; font-size: .8em; animation: blink .5s steps(2) infinite; }
+@keyframes blink { 50% { opacity: .55; } }
+
+/* «Escribe en el chat…» cuando no hay nadie */
+#waiting { position: absolute; left: 230px; right: 330px; bottom: calc(var(--bar-b) + var(--bar-h) * .38); text-align: center; z-index: 2;
+  font-size: calc(30px * var(--k)); font-weight: 700; color: #fff; animation: breathe 2.4s ease-in-out infinite; }
+@keyframes breathe { 50% { opacity: .55; transform: translateY(-3px); } }
+
+/* Avisos: encima de la barra, en el centro */
+#toasts { position: absolute; left: 0; right: 0; bottom: calc(var(--bar-b) + var(--bar-h) + 22px); display: grid; justify-items: center; pointer-events: none; z-index: 4; }
+.toast { grid-area: 1 / 1; max-width: 1100px; padding: 16px 28px 18px; text-align: center; opacity: 0; transform: translateY(30px) scale(.9);
+  transition: opacity .25s, transform .35s cubic-bezier(.3, 1.5, .5, 1); }
+.toast.on { opacity: 1; transform: none; }
+.toast .tt { font-size: 32px; font-weight: 700; color: var(--gold); line-height: 1.1; }
+.toast .tt .cmd { margin-left: 12px; padding: 0 10px; background: var(--gold); color: #000; font-size: 22px; text-shadow: none; vertical-align: middle; }
+.toast .tx { margin-top: 6px; font-size: 22px; color: #fff; }
+.toast.is-small { padding: 10px 22px 12px; }
+.toast.is-small .tt { font-size: 24px; }
+.toast.is-small .tx { font-size: 18px; }
+#stage.quiet .toast { transform-origin: 50% 100%; }
+#stage.quiet .toast.on { transform: scale(.8); }
+.shop { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 14px; margin-top: 12px; text-align: left; }
+.shop .item { display: grid; grid-template-columns: 34px 1fr auto; align-items: center; gap: 10px; padding: 8px 12px; background: #1d1d22; opacity: .65; }
+.shop .item.can { opacity: 1; box-shadow: inset 0 0 0 3px var(--gold); }
+.shop .item b { display: grid; place-items: center; height: 34px; background: #0e0e11; color: var(--gold); font-size: 22px; }
+.shop .item span { font-size: 20px; line-height: 1.1; }
+.shop .item span small { color: #c9c9d6; font-size: 15px; }
+.shop .item em { display: block; font-style: normal; color: #c9c9d6; font-size: 15px; }
+.shop .item i { font-style: normal; color: var(--gold); font-size: 20px; }
