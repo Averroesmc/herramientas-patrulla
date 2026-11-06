@@ -26,3 +26,6 @@ dist-ssr
 # Cloudflare
 .wrangler
 .dev.vars
+
+# Originales generados con IA (se preparan con scripts/preparar-fondos.py)
+arte/

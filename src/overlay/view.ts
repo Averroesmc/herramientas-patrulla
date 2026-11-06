@@ -8,7 +8,11 @@
 import { coinIcon, enemySprite, heroSprite, mugIcon, shade, type HeroSprite } from './sprites'
 import { DOOR_X, ENEMY_X, SPAWN_X, type Fx, type HeroView, type RenderState, type ShopItem } from './game'
 import { sfx, setSound } from './sfx'
-import { fmt, heroTier, stageLabel, themeOf, zoneName, type Config, type Theme } from '../../shared/game'
+import { THEMES, fmt, heroTier, stageLabel, themeOf, zoneName, type Config, type Theme } from '../../shared/game'
+
+/** Los fondos dibujados (scripts/preparar-fondos.py) miden 120 px de alto, con 18 px de suelo bajo donde pisan los héroes. */
+const ART_BAND = 120
+const ART_GROUND = 18
 
 /** Hueco del canvas por encima de la barra, para los números, los avisos de nivel y los bocadillos. */
 const TOP = 130
@@ -44,6 +48,7 @@ export class View {
   private px = 3
   private H = 120
   private groundY = 0
+  private art = new Map<number, HTMLImageElement | null>()
   private heroes = new Map<string, HeroAnim>()
   private enemies = new Map<number, EnemyAnim>()
   private particles: Particle[] = []
@@ -95,7 +100,7 @@ export class View {
     setSound(config.sound && !config.quiet, config.volume)
     this.H = config.barHeight
     this.px = this.H >= 105 ? 3 : 2
-    this.groundY = TOP + this.H - 6 * this.px
+    this.groundY = TOP + this.H - Math.round((ART_GROUND * this.H) / ART_BAND)
     this.canvas.width = W
     this.canvas.height = TOP + this.H
     this.canvas.style.bottom = `${config.barBottom}px`
@@ -624,7 +629,14 @@ export class View {
     const ctx = this.ctx
     const theme: Theme = themeOf(layers.zone)
     ctx.globalAlpha = alpha
-    if (this.config.scenery) {
+    const art = this.config.scenery ? this.zoneArt(layers.zone) : null
+    if (art) {
+      // Fondo dibujado (public/arte/fondos): una franja repetible con el suelo incluido, a la escala de la barra.
+      const k = this.H / ART_BAND
+      const w = Math.round(art.width * k)
+      const off = -Math.round(this.scroll % w)
+      for (let x = off; x < W; x += w) ctx.drawImage(art, x, TOP, w, this.H)
+    } else if (this.config.scenery) {
       const grad = ctx.createLinearGradient(0, TOP, 0, this.groundY)
       grad.addColorStop(0, theme.sky[0])
       grad.addColorStop(1, theme.sky[1])
@@ -639,7 +651,7 @@ export class View {
       ctx.fillStyle = grad
       ctx.fillRect(0, TOP, W, this.groundY - TOP)
     }
-    this.tile(layers.ground, 1, 96)
+    if (!art) this.tile(layers.ground, 1, 96)
     if (this.config.scenery) {
       // Borde de arriba, como una barra de tareas de piedra.
       ctx.fillStyle = '#050507'
@@ -648,6 +660,19 @@ export class View {
       ctx.fillRect(0, TOP, W, 2)
     }
     ctx.globalAlpha = 1
+  }
+
+  /** El fondo dibujado de la zona, o null si aún no ha cargado o no existe (entonces se usa el paisaje hecho con código). */
+  private zoneArt(zone: number): HTMLImageElement | null {
+    const n = ((zone % THEMES.length) + THEMES.length) % THEMES.length + 1
+    let img = this.art.get(n)
+    if (!img) {
+      img = new Image()
+      img.src = `/arte/fondos/${n}.png`
+      img.onerror = () => { this.art.set(n, null) }
+      this.art.set(n, img)
+    }
+    return img && img.complete && img.naturalWidth > 0 ? img : null
   }
 
   private tile(img: HTMLCanvasElement, speed: number, w: number) {
