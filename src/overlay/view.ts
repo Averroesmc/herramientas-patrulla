@@ -912,54 +912,112 @@ export class View {
     }
   }
 
-  /** Los nombres: de delante hacia atrás, y solo los que no se pisan con otro. */
-  private drawNames(order: HeroView[]) {
-    const size = 23 * this.k
+  /* ---------------- nombres */
+
+  private headTop(h: HeroView) { return h.ko ? this.heroY(h) - 9 * this.px : this.heroY(h) - (this.heroes.get(h.k)?.sprite.h ?? 18 * this.px) }
+
+  /** Aparece con suavidad; si se pisa con otro, se quita de golpe (para que nunca se vean dos encima). */
+  private fadeName(a: HeroAnim, show: boolean, instant = true) {
+    if (!show && instant) { a.nameA = 0; return }
+    const follow = Math.min(1, this.dt * 10)
+    a.nameA += ((show ? 1 : 0) - a.nameA) * follow
+  }
+
+  /** Una placa pixelada: el nivel en un cuadradito del color de la plataforma (amarillo si acaba de escribir) y el nombre al lado. */
+  private plate(h: HeroView, cx: number, bottom: number, size: number) {
     const ctx = this.ctx
     ctx.font = `700 ${Math.round(size)}px ${FONT}`
-    // Cada nombre conserva su fila mientras no choque con otro, y se mueve y se desvanece con suavidad:
-    // así, con mucha gente, no saltan de fila ni parpadean al moverse los héroes.
-    const ROWS = 3
-    const headY = (h: HeroView) => this.heroY(h) - (this.heroes.get(h.k)?.sprite.h ?? 18 * this.px)
-    const rowY = (h: HeroView, r: number) => (h.ko ? this.heroY(h) - 9 * this.px : headY(h) - 8) - r * (size + 4)
-    // Primero quien acaba de escribir (su nombre siempre se ve, resaltado), luego los que ya tenían nombre, de delante hacia atrás.
-    const list = order.filter(h => !h.leaving && this.heroes.has(h.k))
-      .sort((p, q) => Number(q.spoke) - Number(p.spoke) || (this.heroes.get(q.k)!.nameRow >= 0 ? 1 : 0) - (this.heroes.get(p.k)!.nameRow >= 0 ? 1 : 0) || q.x - p.x)
+    const lv = String(h.level)
+    const lw = Math.max(size, ctx.measureText(lv).width + 8)
+    const nw = ctx.measureText(h.name).width + 12
+    const w = Math.round(lw + nw)
+    const ph = Math.round(size + 6)
+    const x = Math.round(cx - w / 2)
+    const y = Math.round(bottom - ph)
+    ctx.fillStyle = '#050507'
+    ctx.fillRect(x - 2, y - 2, w + 4, ph + 4)
+    ctx.fillStyle = h.spoke ? '#3a3320' : '#1d1d24'
+    ctx.fillRect(x, y, w, ph)
+    ctx.fillStyle = h.spoke ? '#ffe14d' : NAME_COLOR[h.p]
+    ctx.fillRect(x, y, Math.round(lw), ph)
+    ctx.fillStyle = '#000'
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'alphabetic'
+    ctx.fillText(lv, x + lw / 2, y + ph - 5)
+    ctx.fillStyle = h.spoke ? '#ffe14d' : '#ffffff'
+    ctx.textAlign = 'left'
+    ctx.fillText(h.name, x + lw + 6, y + ph - 5)
+    // Piquito hacia la cabeza.
+    ctx.fillStyle = '#050507'
+    ctx.fillRect(Math.round(cx) - 4, y + ph + 2, 8, 3)
+    ctx.fillRect(Math.round(cx) - 2, y + ph + 5, 4, 3)
+  }
+
+  /** Una flechita del color de la plataforma encima de la cabeza (los que no llevan placa). */
+  private marker(h: HeroView, cx: number, bottom: number) {
+    const ctx = this.ctx
+    const P = this.px
+    const x = Math.round(cx)
+    const y = Math.round(bottom)
+    ctx.fillStyle = '#050507'
+    ctx.fillRect(x - 3 * P - 2, y - 3 * P - 2, 6 * P + 4, P + 4)
+    ctx.fillRect(x - 2 * P - 2, y - 2 * P, 4 * P + 4, P + 2)
+    ctx.fillRect(x - P - 2, y - P, 2 * P + 4, P + 2)
+    ctx.fillStyle = h.spoke ? '#ffe14d' : NAME_COLOR[h.p]
+    ctx.fillRect(x - 3 * P, y - 3 * P, 6 * P, P)
+    ctx.fillRect(x - 2 * P, y - 2 * P, 4 * P, P)
+    ctx.fillRect(x - P, y - P, 2 * P, P)
+  }
+
+  /**
+   * Los nombres: quien acaba de escribir (unos segundos) y quien recibe los golpes llevan una placa con su nivel, en dos
+   * filas como mucho; los demás, una flechita del color de su plataforma. Las placas nunca se pisan: si no caben, no salen.
+   */
+  private drawNames(order: HeroView[]) {
+    const size = 21 * this.k
+    const ctx = this.ctx
+    ctx.font = `700 ${Math.round(size)}px ${FONT}`
     const placed: [number, number, number][] = []
-    const follow = Math.min(1, this.dt * 12)
+    // Preferencia: quien acaba de escribir, los que ya tenían la placa a la vista (así no se turnan), a quien pegan, y de delante hacia atrás.
+    const shown = (h: HeroView) => Number((this.heroes.get(h.k)?.nameA ?? 0) > 0.5)
+    const list = order.filter(h => !h.leaving && this.heroes.has(h.k))
+      .sort((p, q) => Number(q.spoke) - Number(p.spoke) || shown(q) - shown(p) || Number(q.target) - Number(p.target) || q.x - p.x)
+    const width = (h: HeroView) => Math.max(size, ctx.measureText(String(h.level)).width + 8) + ctx.measureText(h.name).width + 12 + 8
+    const span = (h: HeroView, a: HeroAnim): [number, number] => [a.shownX - width(h) / 2, a.shownX + width(h) / 2]
+    const free = (x0: number, x1: number, r: number) => !placed.some(([p0, p1, pr]) => pr === r && x0 < p1 && x1 > p0)
+    // 1) Quien habla (o recibe los golpes) se coloca primero: conserva su fila si puede, si no la otra, y si no, no sale.
+    for (const h of list) {
+      if (!(h.spoke || h.target)) continue
+      const a = this.heroes.get(h.k)!
+      const [x0, x1] = span(h, a)
+      const row = [a.nameA > 0.05 ? a.nameRow : -1, 0, 1].find(r => r >= 0 && free(x0, x1, r)) ?? -1
+      if (row >= 0) { placed.push([x0, x1, row]); a.nameRow = row }
+      this.fadeName(a, row >= 0)
+    }
+    // 2) Los que han dejado de hablar se desvanecen en su sitio; si se pisan con otra placa, se quitan de golpe.
     for (const h of list) {
       const a = this.heroes.get(h.k)!
-      const w = ctx.measureText(h.name).width + 10
-      const x = a.shownX
-      let row = -1
-      for (const r of [a.nameRow, ...Array.from({ length: ROWS }, (_, i) => i)]) {
-        if (r < 0) continue
-        const y = rowY(h, r)
-        if (!placed.some(([px, py, pw]) => Math.abs(py - y) < size && Math.abs(px - x) < (pw + w) / 2)) { row = r; break }
-      }
-      if (row >= 0) {
-        const y = rowY(h, row)
-        placed.push([x, y, w])
-        a.nameY = a.nameRow < 0 && a.nameA < 0.05 ? y : a.nameY + (y - a.nameY) * follow
-        a.nameRow = row
-        a.nameA += (1 - a.nameA) * follow
-      } else {
-        a.nameRow = -1
-        a.nameA += (0 - a.nameA) * follow
-      }
-      if (a.nameA > 0.04) {
-        ctx.globalAlpha = Math.min(1, a.nameA)
-        const color = h.spoke ? '#ffe14d' : NAME_COLOR[h.p]
-        // Si el nombre está en una fila de arriba, una rayita lo une a la cabeza de su héroe.
-        const top = headY(h) - 3
-        if (!h.ko && a.nameY < top - size * 1.05) {
-          ctx.fillStyle = '#000'
-          ctx.fillRect(Math.round(x) - 2, Math.round(a.nameY + 6), 4, Math.round(top - a.nameY - 6))
-          ctx.fillStyle = color
-          ctx.fillRect(Math.round(x) - 1, Math.round(a.nameY + 6), 2, Math.round(top - a.nameY - 6))
-        }
-        this.text(h.name, x, a.nameY, h.spoke ? size * 1.1 : size, color, 'center')
-      }
+      if (h.spoke || h.target || a.nameA <= 0.05) continue
+      const [x0, x1] = span(h, a)
+      if (free(x0, x1, a.nameRow)) { placed.push([x0, x1, a.nameRow]); this.fadeName(a, false, false) } else a.nameA = 0
+    }
+    // 3) Las flechitas de los que no llevan placa (primero, para que las placas queden encima).
+    for (const h of list) {
+      const a = this.heroes.get(h.k)!
+      if (!h.ko && a.nameA < 0.96) { ctx.globalAlpha = 1 - a.nameA; this.marker(h, a.shownX, this.headTop(h) - 6) }
+    }
+    ctx.globalAlpha = 1
+    // 4) Las placas. Las filas van a una altura fija (la del héroe más alto, aunque esté KO), un poco por encima de las
+    // flechitas: así dos placas de filas distintas nunca se cruzan.
+    const base = this.groundY - Math.max(18 * this.px, ...list.map(h => this.heroes.get(h.k)!.sprite.h)) - 5 - 8 - 3 * this.px
+    for (const h of list) {
+      const a = this.heroes.get(h.k)!
+      if (a.nameA <= 0.04) continue
+      const target = base - Math.max(0, a.nameRow) * (size + 14)
+      // Al aparecer sube un poquito; si cambia de fila, salta de golpe (deslizándose se cruzaría con otras).
+      a.nameY = a.nameA < 0.1 ? target + 12 : Math.abs(target - a.nameY) > 14 ? target : a.nameY + (target - a.nameY) * Math.min(1, this.dt * 12)
+      ctx.globalAlpha = Math.min(1, a.nameA)
+      this.plate(h, a.shownX, a.nameY, size)
     }
     ctx.globalAlpha = 1
   }
