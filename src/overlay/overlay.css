@@ -53,7 +53,7 @@ body.preview { background: repeating-conic-gradient(#1c1c22 0 25%, #141418 0 50%
 #stage.quiet .toast { transform-origin: 50% 100%; }
 #stage.quiet .toast.on { transform: scale(.8); }
 /* La tienda de después de cada oleada: en el centro, encima de la barra, compacta; los avisos suben para no taparla. */
-#shopbox { position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(var(--bar-b) + var(--bar-h) + 20px); width: 1500px; padding: 10px 16px 14px; z-index: 4; }
+#shopbox { position: absolute; left: 50%; transform: translateX(-50%) scale(.75); transform-origin: 50% 100%; bottom: calc(var(--bar-b) + var(--bar-h) + 20px); width: 1500px; padding: 10px 16px 14px; z-index: 4; }
 #shopbox .sh { display: flex; align-items: center; gap: 16px; margin-bottom: 10px; font-size: 44px; font-weight: 700; color: var(--gold); line-height: 1; }
 #shopbox .sh .cmd { padding: 2px 12px; background: var(--gold); color: #000; font-size: 32px; text-shadow: none; white-space: nowrap; }
 #shopbox .sh .left { min-width: 90px; text-align: right; color: #fff; }
@@ -70,4 +70,5 @@ body.preview { background: repeating-conic-gradient(#1c1c22 0 25%, #141418 0 50%
 .shop .item .side i { font-style: normal; color: var(--gold); font-size: 30px; }
 .shop .item .side s { min-height: 24px; color: var(--ok); font-size: 24px; text-decoration: none; white-space: nowrap; }
 .shop .item u { position: absolute; left: 0; bottom: 0; height: 8px; background: var(--ok); text-decoration: none; transition: width .3s; }
-#stage.shop-open #toasts { bottom: calc(var(--bar-b) + var(--bar-h) + 190px); }
+#stage.shop-open #toasts { bottom: calc(var(--bar-b) + var(--bar-h) + 150px); }
+
