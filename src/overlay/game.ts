@@ -6,10 +6,10 @@
  * Las fórmulas están en shared/game.ts.
  */
 import {
-  ATTACK_MULT, ENEMY_SWING, FRENZY_MAX_SEC, FRENZY_MULT, FRENZY_SEC, HERO_SWING,
+  ATTACK_MULT, BIG_GIFT, ENEMY_SWING, EVENTS, EVENT_KINDS, FRENZY_MAX_SEC, FRENZY_MULT, FRENZY_SEC, HERO_SWING,
   UPGRADES, UPGRADE_IDS, enemiesInWave, enemyAttack, enemyHp, heroDamage, heroMaxHp, ignoredNames, killGold, killXp,
   koSeconds, maybeNewDay, parseCommand, stageLabel, themeOf, upgradeCost, waveGold, xpNeed, fmt,
-  type Config, type EnemyKind, type HeroRecord, type PanelOp, type Platform, type Summary, type UpgradeId, type World,
+  type Config, type EnemyKind, type EventKind, type HeroRecord, type PanelOp, type Platform, type Summary, type UpgradeId, type World,
 } from '../../shared/game'
 
 /* ---------------------------------------------------------------- geometría de la barra */
@@ -47,6 +47,7 @@ export type Fx =
   | { t: 'buy'; name: string; level: number; by: string }
   | { t: 'poor'; name: string; missing: number }
   | { t: 'support'; title: string; text: string }
+  | { t: 'event'; kind: EventKind; power: number; hits: { e: number; dmg: number }[]; gold: number }
   | { t: 'day'; day: number; zone: number; wave: number; yesterday: Summary | null }
 
 export interface ShopItem { n: number; name: string; effect: string; level: number; cost: number; can: boolean }
@@ -87,6 +88,8 @@ class Hero {
   lastSpoke: number
   lastCmd = 0
   lastAttack = -1e12
+  /** Ha escrito y aún no ha podido dar su golpe (estaba saliendo de la taberna o no había enemigo). */
+  wantsHit = 0
   onField = false
   leaving = false
   joinedAt: number
@@ -174,39 +177,89 @@ export class Game {
 
   isIgnored(name: string) { return this.ignored.has(name.replace(/^@/, '').toLowerCase()) }
 
-  /** Un mensaje del chat: el héroe aparece (o vuelve de la taberna) y, si es un comando, lo hace. */
+  /**
+   * Un mensaje del chat: el héroe aparece (o vuelve de la taberna), se pone delante y da un golpe
+   * fuerte. Así se juega solo con hablar, sin comandos. Si es un comando (!yo, !tienda, !comprar), lo hace.
+   */
   line(l: LineIn) {
     if (this.isIgnored(l.name)) return
     const hero = this.touch(l.k, l.p, l.name)
+    hero.wantsHit = this.now
+    this.strike(hero)
     const cmd = parseCommand(l.text)
     if (!cmd || this.now - hero.lastCmd < 1500) return
     hero.lastCmd = this.now
     switch (cmd.type) {
-      case 'attack': this.powerAttack(hero); break
       case 'me': this.fx.push({ t: 'me', k: hero.rec.k, text: this.describe(hero) }); break
       case 'shop': this.showShop(); break
       case 'buy': this.buy(cmd.id, hero.rec.name); break
     }
   }
 
-  /** Una sub, un regalo, bits o un Super Chat. */
+  /**
+   * Una sub, un regalo, bits o un Super Chat: un evento al azar (con regalos grandes, todos), más
+   * fuerte cuanto más grande el apoyo, y experiencia extra para quien lo manda si está jugando.
+   */
   support(s: SupportIn) {
     const n = Math.max(1, Math.min(s.n, 9999))
-    const title = s.kind === 'sub' ? `¡${s.name} se suscribe!` : s.kind === 'gift' ? `¡${s.name} regala ${n} subs!`
+    if (s.kind === 'bits' && n < 100) return
+    const title = s.kind === 'sub' ? `¡${s.name} se suscribe!` : s.kind === 'gift' ? `¡${s.name} regala ${n} ${n === 1 ? 'sub' : 'subs'}!`
       : s.kind === 'bits' ? `¡${s.name} manda ${n} bits!` : `¡Super Chat de ${s.name}${s.amount ? ` (${s.amount})` : ''}!`
-    const power = s.kind === 'bits' ? Math.min(5, Math.max(1, Math.round(n / 100))) : s.kind === 'gift' ? Math.min(5, n) : s.kind === 'superchat' ? 3 : 1
-    if (this.config.frenzy) this.frenzy = Math.min(FRENZY_MAX_SEC, this.frenzy + FRENZY_SEC * power)
-    this.fx.push({ t: 'support', title, text: this.config.frenzy ? `FRENESÍ: daño ×${FRENZY_MULT}` : '¡Gracias!' })
-    // Quien apoya se lleva experiencia extra si está jugando.
+    const power = s.kind === 'bits' ? Math.min(5, Math.max(1, Math.floor(n / 100))) : s.kind === 'gift' ? Math.min(5, n) : s.kind === 'superchat' ? 3 : 1
     const hero = s.k ? this.heroes.get(s.k) : undefined
     if (hero && hero.loaded) for (let i = 0; i < Math.min(3, power); i++) this.addXp(hero, xpNeed(hero.rec.level) * 0.5)
+    if (!this.config.events) { this.fx.push({ t: 'support', title, text: '¡Gracias!' }); return }
+    const kinds: EventKind[] = s.kind === 'gift' && n >= BIG_GIFT ? EVENT_KINDS : [EVENT_KINDS[Math.floor(Math.random() * EVENT_KINDS.length)]!]
+    this.fx.push({ t: 'support', title, text: kinds.length > 1 ? '¡SUPEREVENTO! Todos los eventos a la vez' : `${EVENTS[kinds[0]!].name}: ${EVENTS[kinds[0]!].effect}` })
+    for (const kind of kinds) this.event(kind, power)
+  }
+
+  /** Lanza un evento. `power` (1 a 5) lo hace más fuerte. */
+  event(kind: EventKind, power: number) {
+    const w = this.world
+    const out = { t: 'event' as const, kind, power, hits: [] as { e: number; dmg: number }[], gold: 0 }
+    // Va antes que los enemigos que mate, para que la pantalla sepa dónde estaban.
+    this.fx.push(out)
+    switch (kind) {
+      case 'frenzy':
+        this.frenzy = Math.min(FRENZY_MAX_SEC, this.frenzy + FRENZY_SEC * power)
+        break
+      case 'meteor': {
+        // Cada meteorito quita un buen trozo de la vida de cada enemigo que haya en pantalla.
+        for (const e of this.enemies.slice()) {
+          const dmg = Math.ceil(e.maxHp * Math.min(1, 0.45 * power))
+          out.hits.push({ e: e.id, dmg })
+          e.hp -= dmg
+          if (e.hp <= 0) this.kill(e, null)
+        }
+        break
+      }
+      case 'goldrain': {
+        const gold = waveGold(w.zone, w.upgrades.banner) * (1 + power)
+        w.gold += gold
+        w.totals.gold += gold
+        out.gold = gold
+        break
+      }
+      case 'blessing':
+        for (const h of this.heroes.values()) {
+          if (!h.onField || h.leaving) continue
+          if (h.ko) { h.ko = 0; this.fx.push({ t: 'up', k: h.rec.k }) }
+          h.hp = this.maxHp(h)
+          this.addXp(h, xpNeed(h.loaded ? h.rec.level : 1) * 0.15 * power)
+        }
+        break
+    }
   }
 
   op(op: PanelOp) {
     switch (op.type) {
       case 'fake': for (let i = 0; i < op.n; i++) this.addDemo(180_000); break
       case 'gold': this.world.gold += op.n; break
-      case 'frenzy': this.support({ name: 'Prueba', kind: 'sub', n: 1 }); break
+      case 'event':
+        if (op.kind === 'all') this.support({ name: 'Prueba', kind: 'gift', n: BIG_GIFT })
+        else { this.fx.push({ t: 'support', title: '¡Evento de prueba!', text: `${EVENTS[op.kind].name}: ${EVENTS[op.kind].effect}` }); this.event(op.kind, 1) }
+        break
       case 'newDay':
         maybeNewDay(this.world, this.now, true)
         this.today.clear()
@@ -285,7 +338,8 @@ export class Game {
     if (field.some(h => !h.demo)) this.world.session.lastAt = now
 
     // Los héroes van a su sitio (los que se van, a la puerta de la taberna).
-    const order = field.slice().sort((a, b) => b.rec.level - a.rec.level || a.joinedAt - b.joinedAt)
+    // Delante, quien ha hablado el último.
+    const order = field.slice().sort((a, b) => b.lastSpoke - a.lastSpoke)
     const spacing = Math.min(46, (FRONT_X - PARTY_MIN_X) / Math.max(1, order.length - 1))
     const targets = new Map<Hero, number>()
     order.forEach((h, i) => targets.set(h, FRONT_X - i * spacing))
@@ -325,6 +379,8 @@ export class Game {
     if (engaged) {
       const ready = field.filter(h => !h.ko && h.x > FRONT_X - 260).sort((a, b) => b.x - a.x)
       victim = ready[0] ?? null
+      // Los golpes de quienes han escrito y aún no habían podido darlo.
+      for (const h of field) if (h.wantsHit && this.enemies.includes(engaged)) this.strike(h)
       // Pegan los héroes que ya están en su sitio.
       for (const h of field) {
         if (h.ko || Math.abs(h.x - (targets.get(h) ?? h.x)) > 30) continue
@@ -411,7 +467,7 @@ export class Game {
     for (const h of this.heroes.values()) {
       if (h.demo && h.demoUntil > this.now) {
         if (this.now - h.lastSpoke > 15_000 + (h.seed % 20_000)) h.lastSpoke = this.now
-        if (Math.random() < 0.012) this.powerAttack(h)
+        if (Math.random() < 0.012) { h.lastSpoke = this.now; h.wantsHit = this.now }
       }
       if (this.now - h.lastSpoke < idleMs && !(h.demo && h.demoUntil <= this.now)) active.push(h)
       else if (h.demo && !h.onField) this.heroes.delete(h.rec.k)
@@ -453,15 +509,18 @@ export class Game {
     for (const h of field) {
       if (h.ko || h === victim) continue
       const max = this.maxHp(h)
-      if (h.hp < max) h.hp = Math.min(max, h.hp + max * 0.05 * dt)
+      if (h.hp < max) h.hp = Math.min(max, h.hp + max * 0.03 * dt)
     }
   }
 
-  private powerAttack(hero: Hero) {
+  /** El golpe fuerte de un mensaje del chat (como mucho uno cada attackSec por persona; si no se puede ahora, en cuanto se pueda). */
+  private strike(hero: Hero) {
+    if (hero.wantsHit && this.now - hero.wantsHit > 10_000) { hero.wantsHit = 0; return }
     const front = this.enemies[0]
     if (!hero.onField || hero.leaving || hero.ko || !front || front.x > ENEMY_X + 1) return
-    if (this.now - hero.lastAttack < this.config.attackSec * 1000) return
+    if (this.now - hero.lastAttack < this.config.attackSec * 1000) { hero.wantsHit = 0; return }
     hero.lastAttack = this.now
+    hero.wantsHit = 0
     this.hit(hero, front, this.damage(hero) * ATTACK_MULT, true)
   }
 
@@ -477,7 +536,7 @@ export class Game {
     if (enemy.hp <= 0) this.kill(enemy, hero)
   }
 
-  private kill(enemy: Enemy, by: Hero) {
+  private kill(enemy: Enemy, by: Hero | null) {
     this.enemies = this.enemies.filter(e => e !== enemy)
     this.waveKills++
     const w = this.world
@@ -487,7 +546,7 @@ export class Game {
     w.totals.kills++
     w.session.kills++
     this.fx.push({ t: 'kill', e: enemy.id, gold })
-    if (!by.demo) { if (by.loaded) by.rec.kills++; else by.pending.kills++ }
+    if (by && !by.demo) { if (by.loaded) by.rec.kills++; else by.pending.kills++ }
     const xp = killXp(w.zone)
     for (const h of this.field()) if (!h.ko) this.addXp(h, xp)
   }

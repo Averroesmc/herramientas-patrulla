@@ -313,7 +313,7 @@ async function overlay(request: Request, env: Env, pathname: string) {
   }
 
   if (pathname === '/api/overlay/save' && request.method === 'POST') {
-    const body = await request.json<{ writer?: unknown; world?: unknown; heroes?: unknown; readers?: unknown }>().catch(() => null)
+    const body = await request.json<{ writer?: unknown; world?: unknown; heroes?: unknown; readers?: unknown; release?: unknown }>().catch(() => null)
     const writer = typeof body?.writer === 'string' ? body.writer.slice(0, 64) : ''
     if (!body || !writer || !body.world) return json({ error: 'faltan datos' }, 400)
     const incoming = sanitizeWorld(body.world, worldOf(row))
@@ -330,8 +330,9 @@ async function overlay(request: Request, env: Env, pathname: string) {
           dmg = excluded.dmg, kills = excluded.kills, last_at = excluded.last_at`)
       .bind(...heroValues(row.user_id, h), row.user_id, row.epoch))
     const results = await db.batch([
+      // Al cerrarse, el overlay suelta el candado (release) para que otro pueda guardar sin esperar.
       db.prepare('UPDATE patrulla SET world = ?, writer = ?, writer_at = ?, readers = ?, updated_at = ? WHERE user_id = ? AND epoch = ?')
-        .bind(JSON.stringify(incoming), writer, now, JSON.stringify(readers), now, row.user_id, row.epoch),
+        .bind(JSON.stringify(incoming), body.release === true ? null : writer, body.release === true ? 0 : now, JSON.stringify(readers), now, row.user_id, row.epoch),
       ...upserts,
     ])
     if (results[0]!.meta.changes !== 1) return json({ error: 'stale' }, 409)

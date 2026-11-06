@@ -96,11 +96,11 @@ export function SettingsPanel({ data, patch }: { data: PanelData; patch: Patch }
         <div className="fields">
           <NumberField label="Héroes a la vez en la barra" value={c.maxHeroes} min={5} max={60} onCommit={v => patch({ maxHeroes: v })} description="El resto espera en la taberna." />
           <NumberField label="Minutos hasta irse a la taberna" value={c.idleMin} min={1} max={60} onCommit={v => patch({ idleMin: v })} description="Sin escribir en el chat." />
-          <NumberField label="Segundos entre dos !atacar" value={c.attackSec} min={1} max={60} onCommit={v => patch({ attackSec: v })} description="De la misma persona." />
+          <NumberField label="Segundos entre dos golpes fuertes" value={c.attackSec} min={1} max={60} onCommit={v => patch({ attackSec: v })} description="Cada mensaje es un golpe; así escribir mucho no da más." />
           <NumberField label="Oleadas por zona" value={c.wavesPerZone} min={2} max={40} onCommit={v => patch({ wavesPerZone: v })} description="Con 10, más o menos una zona por directo." />
         </div>
         <Range label="Dificultad (vida de los enemigos)" value={c.difficulty} min={25} max={400} step={5} unit=" %" onChange={v => patch({ difficulty: v })} />
-        <Switch label="Frenesí con subs, regalos, bits y Super Chats" description="Doble de daño para todos durante 20 s (más con regalos grandes)." checked={c.frenzy} onChange={v => patch({ frenzy: v })} />
+        <Switch label="Eventos con subs, regalos, bits y Super Chats" description="Frenesí, lluvia de meteoritos, lluvia de oro o bendición, al azar. Más fuertes cuanto más grande el apoyo." checked={c.events} onChange={v => patch({ events: v })} />
         <label className="textarea-field">
           <span>Quién no juega</span>
           <textarea rows={3} value={ignore ?? c.ignore} onChange={e => setIgnore(e.target.value)}

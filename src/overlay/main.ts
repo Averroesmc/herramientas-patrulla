@@ -161,7 +161,7 @@ async function main() {
       saving = true
       const { world, heroes } = game.collect()
       try {
-        await save(key, { writer, world, heroes, readers: reader.status }, keepalive)
+        await save(key, { writer, world, heroes, readers: reader.status, ...(keepalive ? { release: true } : {}) }, keepalive)
       } catch (error) {
         game?.unsaved(heroes)
         // Se ha reiniciado o restaurado desde el panel: se carga el mundo nuevo.

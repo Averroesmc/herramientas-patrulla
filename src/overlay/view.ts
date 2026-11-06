@@ -30,6 +30,7 @@ interface Particle { x: number; y: number; vx: number; vy: number; life: number;
 interface Floater { x: number; y: number; text: string; color: string; size: number; life: number; max: number }
 interface Shot { x0: number; y0: number; x1: number; y1: number; t: number; dur: number; color: string }
 interface CoinFly { x0: number; y0: number; t: number; dur: number }
+interface Meteor { x0: number; y0: number; x1: number; y1: number; t: number; dur: number; dmg: number }
 interface Toast { kind: 'small' | 'big' | 'shop'; title: string; text?: string; items?: ShopItem[]; ms: number; important: boolean }
 
 export class View {
@@ -49,6 +50,9 @@ export class View {
   private floaters: Floater[] = []
   private shots: Shot[] = []
   private coins: CoinFly[] = []
+  private meteors: Meteor[] = []
+  private tint: { color: string; t: number } | null = null
+  private crowdLevels = false
   private scroll = 0
   private state: RenderState | null = null
   private layers: { zone: number; far: HTMLCanvasElement; mid: HTMLCanvasElement; ground: HTMLCanvasElement } | null = null
@@ -118,6 +122,8 @@ export class View {
     this.time += dt
     this.state = state
     this.sync(state)
+    // Si suben muchos de nivel a la vez, sin el texto encima de cada uno (sale el aviso de grupo).
+    this.crowdLevels = fx.filter(f => f.t === 'level').length > 3
     for (const f of fx) this.effect(f, state)
     if (state.phase === 'walk' && state.heroes.some(h => !h.leaving)) this.scroll += 80 * dt
     this.update(dt)
@@ -220,7 +226,7 @@ export class View {
       case 'level':
         if (anim && hero) {
           anim.pillar = 1
-          this.float(anim.shownX, this.heroY(hero) - 26 * this.px, `¡NIVEL ${f.level}!`, '#ffe14d', 22 * this.k)
+          if (!this.crowdLevels) this.float(anim.shownX, this.heroY(hero) - 26 * this.px, `¡NIVEL ${f.level}!`, '#ffe14d', 22 * this.k)
         }
         this.levelBatch.push({ name: f.name, level: f.level })
         if (!this.levelAt) this.levelAt = performance.now() + 700
@@ -253,8 +259,11 @@ export class View {
         if (!this.config.quiet) this.toast({ kind: 'small', title: `Falta oro para ${f.name}`, text: `Faltan ${fmt(f.missing)}`, ms: 3000, important: false })
         break
       case 'support':
-        this.toast({ kind: 'big', title: f.title, text: f.text, ms: 5000, important: true })
+        this.toast({ kind: 'big', title: f.title, text: f.text, ms: 5500, important: true })
         this.play('support', 300, () => sfx.frenzy())
+        break
+      case 'event':
+        this.eventFx(f, state)
         break
       case 'day': {
         const y = f.yesterday
@@ -265,6 +274,46 @@ export class View {
         this.play('day', 500, () => sfx.day())
         break
       }
+    }
+  }
+
+  /** Lo que se ve de cada evento de las subs. */
+  private eventFx(f: Extract<Fx, { t: 'event' }>, state: RenderState) {
+    const P = this.px
+    switch (f.kind) {
+      case 'frenzy':
+        this.tint = { color: '#ff6a1f', t: 0.8 }
+        break
+      case 'meteor':
+        f.hits.forEach((h, i) => {
+          const c = this.enemyCenter(h.e)
+          if (!c) return
+          for (let j = 0; j < Math.min(3, f.power); j++) {
+            const x1 = c[0] + (j - 1) * 14
+            this.meteors.push({ x0: x1 + 260 + Math.random() * 120, y0: -40 - i * 40 - j * 60, x1, y1: c[1], t: -(i * 0.15 + j * 0.2), dur: 0.55, dmg: j === 0 ? h.dmg : 0 })
+          }
+        })
+        if (!f.hits.length) this.float(W / 2, TOP + this.H / 2, '¡No había enemigos!', '#ffb347', 22 * this.k)
+        this.play('meteor', 300, () => sfx.meteor())
+        break
+      case 'goldrain':
+        for (let i = 0; i < 26 + f.power * 6; i++) {
+          const x = 220 + Math.random() * (W - HUD_W - 300)
+          this.coins.push({ x0: x, y0: TOP - 40 - Math.random() * 120, t: -Math.random() * 1.2, dur: 1.1 })
+        }
+        this.float(W / 2, TOP + this.H * 0.45, `+${fmt(f.gold)} de oro`, '#ffe14d', 30 * this.k)
+        this.play('goldrain', 300, () => sfx.goldrain())
+        break
+      case 'blessing':
+        this.tint = { color: '#9dffb0', t: 0.6 }
+        for (const h of state.heroes) {
+          const a = this.heroes.get(h.k)
+          if (!a) continue
+          a.pillar = 1
+          this.burst(a.shownX, this.heroY(h) - 8 * P, '#b6ffc4', 6, 120)
+        }
+        this.play('blessing', 300, () => sfx.level())
+        break
     }
   }
 
@@ -362,6 +411,18 @@ export class View {
     this.floaters = this.floaters.filter(f => f.life < f.max)
     for (const s of this.shots) s.t += dt
     this.shots = this.shots.filter(s => s.t < s.dur)
+    for (const m of this.meteors) {
+      const was = m.t
+      m.t += dt
+      if (was < m.dur && m.t >= m.dur) {
+        this.burst(m.x1, m.y1, '#ff7a1f', 18, 260)
+        this.burst(m.x1, m.y1, '#ffe14d', 10, 180)
+        if (m.dmg) this.float(m.x1, m.y1 - 34, `¡-${fmt(m.dmg)}!`, '#ff9a3d', 30 * this.k)
+        this.play('boom', 90, () => sfx.crit())
+      }
+    }
+    this.meteors = this.meteors.filter(m => m.t < m.dur)
+    if (this.tint) { this.tint.t -= dt; if (this.tint.t <= 0) this.tint = null }
     for (const c of this.coins) c.t += dt
     const arrived = this.coins.filter(c => c.t >= c.dur).length
     if (arrived) this.goldPulse = 1
@@ -415,12 +476,33 @@ export class View {
     ctx.globalAlpha = 1
     const goldX = W - 12 - HUD_W + 28
     const goldY = TOP + this.H - 24 * this.k
+    for (const m of this.meteors) {
+      if (m.t < 0) continue
+      const t = m.t / m.dur
+      const x = m.x0 + (m.x1 - m.x0) * t
+      const y = m.y0 + (m.y1 - m.y0) * t
+      for (let i = 4; i >= 0; i--) {
+        ctx.globalAlpha = i ? 0.5 - i * 0.08 : 1
+        ctx.fillStyle = i ? '#ff7a1f' : '#fff2a8'
+        const s = px * (i ? 3 : 4)
+        ctx.fillRect(Math.round(x + i * 9 - s / 2), Math.round(y - i * 13 - s / 2), s, s)
+      }
+      ctx.globalAlpha = 1
+    }
     for (const c of this.coins) {
+      if (c.t < 0) continue
       const t = c.t / c.dur
       const e = t * t
       const x = c.x0 + (goldX - c.x0) * e
       const y = c.y0 + (goldY - c.y0) * e - Math.sin(t * Math.PI) * 70
       if (this.icons) ctx.drawImage(this.icons.coin, Math.round(x - 3 * px), Math.round(y - 3 * px))
+    }
+
+    if (this.tint) {
+      ctx.globalAlpha = Math.min(0.35, this.tint.t * 0.5)
+      ctx.fillStyle = this.tint.color
+      ctx.fillRect(0, TOP, W, this.H)
+      ctx.globalAlpha = 1
     }
 
     this.drawNames(order)

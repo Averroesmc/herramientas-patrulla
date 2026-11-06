@@ -35,14 +35,14 @@ export interface Config {
   maxHeroes: number
   /** Minutos sin escribir hasta que el héroe se va a la taberna. */
   idleMin: number
-  /** Segundos de espera entre dos !atacar de la misma persona. */
+  /** Cada mensaje del chat es un golpe fuerte de su héroe: como mucho uno cada tantos segundos por persona. */
   attackSec: number
   /** Vida de los enemigos, en %: 100 es lo normal. */
   difficulty: number
   /** Oleadas que hay que superar para pasar a la zona siguiente. */
   wavesPerZone: number
-  /** Subs, bits y Super Chats dan frenesí (doble de daño un rato). */
-  frenzy: boolean
+  /** Subs, regalos, bits y Super Chats lanzan eventos (frenesí, meteoritos, lluvia de oro, bendición). */
+  events: boolean
   /** Nombres que no juegan (bots y quien se quiera sacar), separados por comas. */
   ignore: string
 }
@@ -65,7 +65,7 @@ export function defaultConfig(): Config {
     attackSec: 5,
     difficulty: 100,
     wavesPerZone: 10,
-    frenzy: true,
+    events: true,
     ignore: DEFAULT_IGNORE,
   }
 }
@@ -102,7 +102,7 @@ export function sanitizeConfig(raw: unknown, base: Config = defaultConfig()): Co
     attackSec: clamp(o.attackSec, 1, 60, base.attackSec),
     difficulty: clamp(o.difficulty, 25, 400, base.difficulty),
     wavesPerZone: clamp(o.wavesPerZone, 2, 40, base.wavesPerZone),
-    frenzy: bool(o.frenzy, base.frenzy),
+    events: bool(o.events, base.events),
     ignore: typeof o.ignore === 'string' ? str(o.ignore, 2000) : base.ignore,
   }
 }
@@ -136,7 +136,7 @@ export const upgradeCost = (id: UpgradeId, level: number) => Math.round(UPGRADES
 
 /** Cada cuánto pega solo un héroe, en segundos. */
 export const HERO_SWING = 1.2
-/** Un !atacar vale por este número de golpes normales. */
+/** El golpe de cada mensaje del chat vale por este número de golpes normales. */
 export const ATTACK_MULT = 4
 /** El frenesí multiplica el daño de todos. */
 export const FRENZY_MULT = 2
@@ -161,11 +161,24 @@ export const koSeconds = (campfire: number) => KO_SEC * 0.85 ** campfire
  */
 export const enemyHp = (zone: number, wave: number, heroes: number, difficulty: number) =>
   Math.round(70 * 1.17 ** zone * (1 + 0.04 * wave) * Math.max(1, heroes) ** 0.7 * (difficulty / 100))
-export const enemyAttack = (zone: number, difficulty: number) => 3 * 1.2 ** zone * Math.sqrt(difficulty / 100)
+export const enemyAttack = (zone: number, difficulty: number) => 6 * 1.2 ** zone * Math.sqrt(difficulty / 100)
 export const enemiesInWave = (wave: number) => 10 + Math.floor(wave / 2)
 export const killXp = (zone: number) => 1.8 * 1.3 ** zone
 export const killGold = (zone: number, banner: number) => Math.round(2 * 1.25 ** zone * 1.2 ** banner)
 export const waveGold = (zone: number, banner: number) => Math.round(15 * 1.25 ** zone * 1.2 ** banner)
+
+/* ---------------------------------------------------------------- eventos (subs, regalos, bits, Super Chats) */
+
+export type EventKind = 'frenzy' | 'meteor' | 'goldrain' | 'blessing'
+export const EVENT_KINDS: EventKind[] = ['frenzy', 'meteor', 'goldrain', 'blessing']
+export const EVENTS: Record<EventKind, { name: string; effect: string }> = {
+  frenzy: { name: 'Frenesí', effect: 'doble de daño para todos un rato' },
+  meteor: { name: 'Lluvia de meteoritos', effect: 'cae sobre los enemigos que haya delante' },
+  goldrain: { name: 'Lluvia de oro', effect: 'oro para el grupo (como varias oleadas)' },
+  blessing: { name: 'Bendición', effect: 'experiencia para todos, cura y levanta a los KO' },
+}
+/** Un regalo de tantas subs (o más) lanza todos los eventos a la vez. */
+export const BIG_GIFT = 5
 
 /* ---------------------------------------------------------------- zonas */
 
@@ -382,7 +395,6 @@ export const heroTier = (level: number) => (level >= 35 ? 4 : level >= 20 ? 3 : 
 /* ---------------------------------------------------------------- comandos del chat */
 
 export type Command =
-  | { type: 'attack' }
   | { type: 'me' }
   | { type: 'shop' }
   | { type: 'buy'; id: UpgradeId }
@@ -394,7 +406,6 @@ export function parseCommand(text: string): Command | null {
   if (!m) return null
   const word = m[1]!
   const arg = m[2]!.trim()
-  if (['atacar', 'ataque', 'attack', 'atk', 'pegar'].includes(word)) return { type: 'attack' }
   if (['yo', 'nivel', 'stats', 'heroe', 'me'].includes(word)) return { type: 'me' }
   if (['tienda', 'shop', 'mejoras'].includes(word)) return { type: 'shop' }
   if (['comprar', 'buy', 'mejorar'].includes(word)) {
@@ -412,7 +423,7 @@ export function parseCommand(text: string): Command | null {
 export type PanelOp =
   | { type: 'fake'; n: number }
   | { type: 'gold'; n: number }
-  | { type: 'frenzy' }
+  | { type: 'event'; kind: EventKind | 'all' }
   | { type: 'newDay' }
 
 export interface QueuedOp { id: number; at: number; op: PanelOp }
@@ -422,7 +433,7 @@ export function sanitizeOp(raw: unknown): PanelOp | null {
   switch (o.type) {
     case 'fake': return { type: 'fake', n: clamp(o.n, 1, 20, 5) }
     case 'gold': return { type: 'gold', n: clamp(o.n, 1, 1e9, 100) }
-    case 'frenzy': return { type: 'frenzy' }
+    case 'event': return { type: 'event', kind: o.kind === 'all' || EVENT_KINDS.includes(o.kind as EventKind) ? (o.kind as EventKind | 'all') : 'frenzy' }
     case 'newDay': return { type: 'newDay' }
     default: return null
   }

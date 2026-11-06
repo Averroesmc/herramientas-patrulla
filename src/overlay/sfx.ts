@@ -80,5 +80,7 @@ export const sfx = {
   join() { tone(note(19), 0, 0.05, 'square', 0.04); tone(note(26), 0.05, 0.07, 'square', 0.04) },
   buy() { tone(note(12), 0, 0.08, 'square', 0.1); tone(note(19), 0.08, 0.08, 'square', 0.1); tone(note(24), 0.16, 0.25, 'square', 0.1) },
   frenzy() { noise(0, 0.5, 0.3, 300, 3000); for (let i = 0; i < 6; i++) tone(note(12 + i * 2), i * 0.06, 0.08, 'sawtooth', 0.06) },
+  meteor() { noise(0, 0.9, 0.35, 3500, 200); tone(900, 0, 0.6, 'sawtooth', 0.05, 120) },
+  goldrain() { for (let i = 0; i < 8; i++) tone(note(24 + (i % 4) * 3), i * 0.07, 0.07, 'square', 0.05) },
   day() { tone(note(7), 0, 0.12, 'triangle', 0.18); tone(note(12), 0.14, 0.12, 'triangle', 0.18); tone(note(16), 0.28, 0.4, 'triangle', 0.18) },
 }

@@ -29,7 +29,8 @@ export const poll = (key: string, cv: number) => call<Poll>(`/api/overlay/poll${
 export const loadHeroes = (key: string, keys: string[]) =>
   call<{ heroes: HeroRecord[] }>(`/api/overlay/heroes${q(key)}`, { method: 'POST', body: JSON.stringify({ keys }) })
 
-export type SaveBody = { writer: string; world: World; heroes: HeroRecord[]; readers: Readers }
+/** `release`: el overlay se cierra y deja guardar a otro enseguida (al recargar la fuente de OBS, por ejemplo). */
+export type SaveBody = { writer: string; world: World; heroes: HeroRecord[]; readers: Readers; release?: boolean }
 
 export const save = (key: string, body: SaveBody, keepalive = false) =>
   call<{ ok: true }>(`/api/overlay/save${q(key)}`, { method: 'POST', body: JSON.stringify(body), keepalive })

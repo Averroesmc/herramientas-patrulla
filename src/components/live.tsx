@@ -3,7 +3,7 @@ import { Check, Copy, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/arc/button/button'
 import { newKey, overlayOpen, overlayUrl, type PanelData } from '@/lib/api'
 import {
-  PLATFORMS, PLATFORM_NAME, UPGRADES, UPGRADE_IDS, fmt, stageLabel, upgradeCost, xpNeed, zoneName,
+  BIG_GIFT, EVENTS, EVENT_KINDS, PLATFORMS, PLATFORM_NAME, UPGRADES, UPGRADE_IDS, fmt, stageLabel, upgradeCost, xpNeed, zoneName,
   type PanelOp, type ReaderStatus,
 } from '../../shared/game'
 
@@ -128,7 +128,8 @@ export function AdventurePanel({ data, ops }: { data: PanelData; ops: Ops }) {
       <div className="row-start">
         <Button variant="secondary" size="sm" onClick={() => ops({ type: 'fake', n: 5 })}>+5 héroes de prueba</Button>
         <Button variant="secondary" size="sm" onClick={() => ops({ type: 'gold', n: 500 })}>+500 de oro</Button>
-        <Button variant="secondary" size="sm" onClick={() => ops({ type: 'frenzy' })}>Frenesí (como una sub)</Button>
+        {EVENT_KINDS.map(kind => <Button key={kind} variant="secondary" size="sm" onClick={() => ops({ type: 'event', kind })}>{EVENTS[kind].name}</Button>)}
+        <Button variant="secondary" size="sm" onClick={() => ops({ type: 'event', kind: 'all' })}>Superevento (regalo de {BIG_GIFT})</Button>
         <Button variant="secondary" size="sm" onClick={() => ops({ type: 'newDay' })}>Empezar día nuevo</Button>
       </div>
       <p className="hint-text">
@@ -174,13 +175,12 @@ export function CommandsPanel({ data }: { data: PanelData }) {
     <section className="panel">
       <h2 className="panel__title">Comandos del chat</h2>
       <ul className="commands">
-        <li><span><b>Escribir cualquier cosa</b></span><span>Tu héroe sale de la taberna y se une a la patrulla. Tras {c.idleMin} min sin escribir, vuelve a la taberna.</span></li>
-        <li><code>!atacar</code><span>Un golpe fuerte (×4). Cada {c.attackSec} s como mucho.</span></li>
+        <li><span><b>Escribir cualquier cosa</b></span><span>Tu héroe sale de la taberna, se pone el primero de la fila y da un golpe fuerte (×4, como mucho uno cada {c.attackSec} s). No hace falta ningún comando: se juega hablando. Tras {c.idleMin} min sin escribir, vuelve a la taberna.</span></li>
         <li><code>!yo</code><span>Tu nivel y el daño que llevas, encima de tu héroe.</span></li>
         <li><code>!tienda</code><span>Las mejoras del grupo y lo que cuestan.</span></li>
         <li><code>!comprar 1</code><span>Compra una mejora con el oro de todos (1 Herrería, 2 Estandarte, 3 Armería, 4 Hoguera).</span></li>
       </ul>
-      <p className="hint-text">Subs, regalos, bits y Super Chats dan <b>frenesí</b> (doble de daño un rato){c.frenzy ? '' : ' (ahora está apagado en la configuración)'} y experiencia extra a quien los manda.</p>
+      <p className="hint-text">Subs, regalos, bits (desde 100) y Super Chats lanzan un <b>evento</b> al azar{c.events ? '' : ' (ahora están apagados en la configuración)'}: {EVENT_KINDS.map(k => EVENTS[k].name.toLowerCase()).join(', ')}. Un regalo de {BIG_GIFT} subs o más lanza todos a la vez. Quien apoya se lleva además experiencia extra.</p>
     </section>
   )
 }
